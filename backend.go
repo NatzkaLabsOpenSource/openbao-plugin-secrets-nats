@@ -7,9 +7,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/edgefarm/vault-plugin-secrets-nats/pkg/stm"
-	"github.com/hashicorp/vault/sdk/framework"
-	"github.com/hashicorp/vault/sdk/logical"
+	"github.com/NatzkaLabsOpenSource/openbao-plugin-secrets-nats/pkg/stm"
+	"github.com/openbao/openbao/sdk/v2/framework"
+	"github.com/openbao/openbao/sdk/v2/logical"
 )
 
 // natsBackend defines an object that
@@ -51,14 +51,12 @@ func backend() *NatsBackend {
 			pathCreds(&b),
 			[]*framework.Path{},
 		),
-		Secrets: []*framework.Secret{
-			// b.hashiCupsToken(),
-		},
 		BackendType:       logical.TypeLogical,
 		Invalidate:        b.invalidate,
 		WALRollbackMinAge: 30 * time.Second,
 		PeriodicFunc:      b.periodicFunc,
 	}
+
 	return &b
 }
 
@@ -253,20 +251,7 @@ func (b *NatsBackend) periodicRefreshUserIssues(ctx context.Context, storage log
 			return err
 		}
 
-		jwtMissing := false
 		nkeyMissing := false
-		jwt, err := readUserJWT(ctx, storage, JWTParameters{
-			Operator: operator,
-			Account:  account,
-			User:     issueName,
-		})
-		if err != nil {
-			return err
-		}
-		if !issue.Status.User.JWT || jwt == nil {
-			jwtMissing = true
-		}
-
 		nkey, err := readUserNkey(ctx, storage, NkeyParameters{
 			Operator: operator,
 			Account:  account,
@@ -279,7 +264,7 @@ func (b *NatsBackend) periodicRefreshUserIssues(ctx context.Context, storage log
 			nkeyMissing = true
 		}
 
-		if jwtMissing || nkeyMissing {
+		if nkeyMissing {
 			if err := refreshUser(ctx, storage, issue); err != nil {
 				return err
 			}

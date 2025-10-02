@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"regexp"
 
-	"github.com/edgefarm/vault-plugin-secrets-nats/pkg/stm"
-	"github.com/hashicorp/vault/sdk/framework"
-	"github.com/hashicorp/vault/sdk/logical"
+	"github.com/NatzkaLabsOpenSource/openbao-plugin-secrets-nats/pkg/stm"
 	"github.com/nats-io/jwt/v2"
+	"github.com/openbao/openbao/sdk/v2/framework"
+	"github.com/openbao/openbao/sdk/v2/logical"
 	"github.com/rs/zerolog/log"
 )
 
@@ -22,7 +22,6 @@ type JWTStorage struct {
 type JWTParameters struct {
 	Operator string `json:"operator,omitempty"`
 	Account  string `json:"account,omitempty"`
-	User     string `json:"user,omitempty"`
 	JWTStorage
 }
 
@@ -34,7 +33,6 @@ type JWTData struct {
 func pathJWT(b *NatsBackend) []*framework.Path {
 	paths := []*framework.Path{}
 	paths = append(paths, pathOperatorJWT(b)...)
-	paths = append(paths, pathUserJWT(b)...)
 	paths = append(paths, pathAccountJWT(b)...)
 	return paths
 }

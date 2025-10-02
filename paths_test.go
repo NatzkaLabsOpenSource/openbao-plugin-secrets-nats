@@ -4,9 +4,9 @@ import (
 	"context"
 	"testing"
 
-	"github.com/hashicorp/vault/sdk/logical"
 	"github.com/nats-io/jwt/v2"
 	"github.com/nats-io/nkeys"
+	"github.com/openbao/openbao/sdk/v2/logical"
 	"github.com/stretchr/testify/assert"
 )
 

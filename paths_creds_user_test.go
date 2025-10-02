@@ -2,37 +2,19 @@ package natsbackend
 
 import (
 	"context"
-	"fmt"
 	"testing"
+	"time"
 
-	"github.com/hashicorp/vault/sdk/logical"
 	"github.com/nats-io/jwt/v2"
-	"github.com/nats-io/nkeys"
+	"github.com/openbao/openbao/sdk/v2/logical"
 	"github.com/stretchr/testify/assert"
 )
 
-func createUserCreds() string {
-	accountKey, _ := nkeys.CreateAccount()
-	userKey, _ := nkeys.CreateUser()
-	pub, _ := userKey.PublicKey()
-	claim := jwt.NewUserClaims(pub)
-	encoded, _ := claim.Encode(accountKey)
-
-	seed, _ := userKey.Seed()
-	creds, _ := jwt.FormatUserConfig(encoded, seed)
-
-	strCreds := string(creds)
-	return strCreds
-}
-
 func TestCRUDUserCreds(t *testing.T) {
 	b, reqStorage := getTestBackend(t)
+	path := "creds/operator/op1/account/ac1/user/u1"
 
-	t.Run("Test CRUD for user creds", func(t *testing.T) {
-
-		path := "creds/operator/op1/account/acc1/user/u1"
-
-		// first call read/delete/list without creating the key
+	t.Run("Test CRUD for user without setup", func(t *testing.T) {
 		resp, err := b.HandleRequest(context.Background(), &logical.Request{
 			Operation: logical.ReadOperation,
 			Path:      path,
@@ -40,149 +22,119 @@ func TestCRUDUserCreds(t *testing.T) {
 		})
 		assert.NoError(t, err)
 		assert.True(t, resp.IsError())
-
-		resp, err = b.HandleRequest(context.Background(), &logical.Request{
-			Operation: logical.DeleteOperation,
-			Path:      path,
-			Storage:   reqStorage,
-		})
-		assert.NoError(t, err)
-		assert.False(t, resp.IsError())
-
-		resp, err = b.HandleRequest(context.Background(), &logical.Request{
-			Operation: logical.ListOperation,
-			Path:      "creds/operator/op1/account/acc1/user/",
-			Storage:   reqStorage,
-		})
-		assert.NoError(t, err)
-		assert.False(t, resp.IsError())
-		assert.Equal(t, resp.Data, map[string]interface{}{})
-
-		// then create the key and read it
-		resp, err = b.HandleRequest(context.Background(), &logical.Request{
-			Operation: logical.CreateOperation,
-			Path:      path,
-			Storage:   reqStorage,
-			Data: map[string]interface{}{
-				"creds": createUserCreds(),
-			},
-		})
-		assert.NoError(t, err)
-		assert.False(t, resp.IsError())
-
-		resp, err = b.HandleRequest(context.Background(), &logical.Request{
-			Operation: logical.ReadOperation,
-			Path:      path,
-			Storage:   reqStorage,
-		})
-		assert.NoError(t, err)
-		assert.False(t, resp.IsError())
-		assert.True(t, resp.Data["creds"].(string) != "")
-
-		resp, err = b.HandleRequest(context.Background(), &logical.Request{
-			Operation: logical.ListOperation,
-			Path:      "creds/operator/op1/account/acc1/user/",
-			Storage:   reqStorage,
-		})
-		assert.NoError(t, err)
-		assert.False(t, resp.IsError())
-		assert.Equal(t, map[string]interface{}{"keys": []string{"u1"}}, resp.Data)
-
-		// then delete the key and read it
-		resp, err = b.HandleRequest(context.Background(), &logical.Request{
-			Operation: logical.DeleteOperation,
-			Path:      path,
-			Storage:   reqStorage,
-		})
-		assert.NoError(t, err)
-		assert.False(t, resp.IsError())
-
-		resp, err = b.HandleRequest(context.Background(), &logical.Request{
-			Operation: logical.ReadOperation,
-			Path:      path,
-			Storage:   reqStorage,
-		})
-		assert.NoError(t, err)
-		assert.True(t, resp.IsError())
-
-		// then recreate the key and read and delete it
-		resp, err = b.HandleRequest(context.Background(), &logical.Request{
-			Operation: logical.CreateOperation,
-			Path:      path,
-			Storage:   reqStorage,
-			Data: map[string]interface{}{
-				"creds": createUserCreds(),
-			},
-		})
-		assert.NoError(t, err)
-		assert.False(t, resp.IsError())
-
-		resp, err = b.HandleRequest(context.Background(), &logical.Request{
-			Operation: logical.ReadOperation,
-			Path:      path,
-			Storage:   reqStorage,
-		})
-		assert.NoError(t, err)
-		assert.False(t, resp.IsError())
-
-		resp, err = b.HandleRequest(context.Background(), &logical.Request{
-			Operation: logical.DeleteOperation,
-			Path:      path,
-			Storage:   reqStorage,
-		})
-		assert.NoError(t, err)
-		assert.False(t, resp.IsError())
 	})
 
-	t.Run("Test CRUD for multiple user creds", func(t *testing.T) {
-		// create 3 keys
-		for i := 0; i < 3; i++ {
-			path := fmt.Sprintf("creds/operator/op1/account/acc1/user/u%d", i)
-			resp, err := b.HandleRequest(context.Background(), &logical.Request{
-				Operation: logical.CreateOperation,
-				Path:      path,
-				Storage:   reqStorage,
-				Data: map[string]interface{}{
-					"creds": createUserCreds(),
-				},
-			})
-			assert.NoError(t, err)
-			assert.False(t, resp.IsError())
-		}
-
-		// list the keys
+	t.Run("Test CRUD for user with non-expiring credentials", func(t *testing.T) {
+		// operator
 		resp, err := b.HandleRequest(context.Background(), &logical.Request{
-			Operation: logical.ListOperation,
-			Path:      "creds/operator/op1/account/acc1/user",
+			Operation: logical.CreateOperation,
+			Path:      "issue/operator/op1",
 			Storage:   reqStorage,
+			Data:      map[string]interface{}{},
 		})
 		assert.NoError(t, err)
 		assert.False(t, resp.IsError())
-		assert.Equal(t, map[string]interface{}{
-			"keys": []string{"u0", "u1", "u2"},
-		}, resp.Data)
 
-		// delete the keys
-		for i := 0; i < 3; i++ {
-			path := fmt.Sprintf("creds/operator/op1/account/acc1/user/u%d", i)
-			resp, err := b.HandleRequest(context.Background(), &logical.Request{
-				Operation: logical.DeleteOperation,
-				Path:      path,
-				Storage:   reqStorage,
-			})
-			assert.NoError(t, err)
-			assert.False(t, resp.IsError())
-		}
-
-		// list the keys
+		// account
 		resp, err = b.HandleRequest(context.Background(), &logical.Request{
-			Operation: logical.ListOperation,
-			Path:      "creds/operator/op1/account/acc1/user",
+			Operation: logical.CreateOperation,
+			Path:      "issue/operator/op1/account/ac1",
+			Storage:   reqStorage,
+			Data:      map[string]interface{}{},
+		})
+		assert.NoError(t, err)
+		assert.False(t, resp.IsError())
+
+		// user
+		resp, err = b.HandleRequest(context.Background(), &logical.Request{
+			Operation: logical.CreateOperation,
+			Path:      "issue/operator/op1/account/ac1/user/u1",
+			Storage:   reqStorage,
+			Data:      map[string]interface{}{},
+		})
+		assert.NoError(t, err)
+		assert.False(t, resp.IsError())
+
+		// read creds
+		resp, err = b.HandleRequest(context.Background(), &logical.Request{
+			Operation: logical.ReadOperation,
+			Path:      path,
 			Storage:   reqStorage,
 		})
 		assert.NoError(t, err)
 		assert.False(t, resp.IsError())
-		assert.Equal(t, map[string]interface{}{}, resp.Data)
+		assert.NotNil(t, resp.Data["creds"])
 
+		creds := resp.Data["creds"].(string)
+		assert.NotEmpty(t, creds)
+
+		token, err := jwt.ParseDecoratedJWT([]byte(creds))
+		assert.NoError(t, err)
+		assert.NotEmpty(t, token)
+
+		_, err = jwt.ParseDecoratedNKey([]byte(creds))
+		assert.NoError(t, err)
+
+		claims, err := jwt.DecodeUserClaims(token)
+		assert.NoError(t, err)
+		assert.Equal(t, int64(0), claims.Expires)
+	})
+
+	t.Run("Test CRUD for user with expiring credentials", func(t *testing.T) {
+		// operator
+		resp, err := b.HandleRequest(context.Background(), &logical.Request{
+			Operation: logical.CreateOperation,
+			Path:      "issue/operator/op1",
+			Storage:   reqStorage,
+			Data:      map[string]interface{}{},
+		})
+		assert.NoError(t, err)
+		assert.False(t, resp.IsError())
+
+		// account
+		resp, err = b.HandleRequest(context.Background(), &logical.Request{
+			Operation: logical.CreateOperation,
+			Path:      "issue/operator/op1/account/ac1",
+			Storage:   reqStorage,
+			Data:      map[string]interface{}{},
+		})
+		assert.NoError(t, err)
+		assert.False(t, resp.IsError())
+
+		// user
+		resp, err = b.HandleRequest(context.Background(), &logical.Request{
+			Operation: logical.CreateOperation,
+			Path:      "issue/operator/op1/account/ac1/user/u1",
+			Storage:   reqStorage,
+			Data: map[string]interface{}{
+				"credsTTL": 600,
+			},
+		})
+		assert.NoError(t, err)
+		assert.False(t, resp.IsError())
+
+		// read creds
+		resp, err = b.HandleRequest(context.Background(), &logical.Request{
+			Operation: logical.ReadOperation,
+			Path:      path,
+			Storage:   reqStorage,
+		})
+		assert.NoError(t, err)
+		assert.False(t, resp.IsError())
+		assert.NotNil(t, resp.Data["creds"])
+
+		creds := resp.Data["creds"].(string)
+		assert.NotEmpty(t, creds)
+
+		token, err := jwt.ParseDecoratedJWT([]byte(creds))
+		assert.NoError(t, err)
+		assert.NotEmpty(t, token)
+
+		_, err = jwt.ParseDecoratedNKey([]byte(creds))
+		assert.NoError(t, err)
+
+		claims, err := jwt.DecodeUserClaims(token)
+		assert.NoError(t, err)
+		assert.Greater(t, claims.Expires, time.Now().Unix())
 	})
 }

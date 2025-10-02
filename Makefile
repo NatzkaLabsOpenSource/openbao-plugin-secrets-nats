@@ -1,4 +1,4 @@
-GO_ARCH = amd64
+GO_ARCH ?= $(shell go env GOARCH)
 
 UNAME = $(shell uname -s)
 
@@ -21,22 +21,22 @@ generate:
 all: fmt build start
 
 build: generate
-	CGO_ENABLED=0 GOOS=$(OS) GOARCH=$(GO_ARCH) go build -o build/vault/plugins/vault-plugin-secrets-nats-$(OS)-$(GO_ARCH) -gcflags "all=-N -l" -ldflags '-extldflags "-static"' cmd/vault-plugin-secrets-nats/main.go
+	CGO_ENABLED=0 GOOS=$(OS) GOARCH=$(GO_ARCH) go build -o build/openbao/plugins/openbao-plugin-secrets-nats-$(OS)-$(GO_ARCH) -gcflags "all=-N -l" -ldflags '-extldflags "-static"' cmd/openbao-plugin-secrets-nats/main.go
 
 docker: build
-	docker build -t $(DOCKER_REGISTRY)/vault-with-nats-secrets:$(VERSION) -f build/vault/Dockerfile .
+	docker build -t $(DOCKER_REGISTRY)/openbao-with-nats-secrets:$(VERSION) -f build/openbao/Dockerfile .
 
 push: docker
-	docker push $(DOCKER_REGISTRY)/vault-with-nats-secrets:$(VERSION)
+	docker push $(DOCKER_REGISTRY)/openbao-with-nats-secrets:$(VERSION)
 
 start:
-	vault server -dev -dev-root-token-id=root -dev-plugin-dir=./build/vault/plugins -log-level=trace -dev-listen-address=127.0.0.1:8200
+	bao server -dev -dev-root-token-id=root -dev-plugin-dir=./build/openbao/plugins -log-level=trace -dev-listen-address=127.0.0.1:8200
 
 enable:
-	VAULT_ADDR='http://127.0.0.1:8200' vault secrets enable -path=nats-secrets vault-plugin-secrets-nats
+	VAULT_ADDR='http://127.0.0.1:8200' bao secrets enable -path=nats-secrets openbao-plugin-secrets-nats-$(OS)-$(GO_ARCH)
 
 clean:
-	rm -f ./build/vault/plugins/vault-plugin-secrets-nats-*
+	rm -f ./build/openbao/plugins/openbao-plugin-secrets-nats-*
 
 fmt:
 	go fmt $$(go list ./...)
@@ -46,8 +46,10 @@ test:
 	go test ./...
 	go vet ./...
 
+example:
+	VAULT_ADDR='http://127.0.0.1:8200' example/config.sh
 
-e2e:
-	hack/e2e_script.sh
+example-keep-running:
+	KEEP_RUNNING="1" VAULT_ADDR='http://127.0.0.1:8200' example/config.sh
 
 .PHONY: build clean fmt start enable test generate

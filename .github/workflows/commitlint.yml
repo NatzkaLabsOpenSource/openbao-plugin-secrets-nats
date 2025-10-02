@@ -2,17 +2,14 @@ name: Lint Commit Messages
 on:
   pull_request:
     branches:
-      - "**"
-  push:
-    branches:
       - main
-      - beta
 
 jobs:
   commitlint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
+
       - uses: wagoid/commitlint-github-action@v5

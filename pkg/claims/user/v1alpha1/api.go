@@ -1,7 +1,7 @@
 package v1alpha1
 
 import (
-	"github.com/edgefarm/vault-plugin-secrets-nats/pkg/claims/common"
+	"github.com/NatzkaLabsOpenSource/openbao-plugin-secrets-nats/pkg/claims/common"
 )
 
 // Specifies claims of the JWT

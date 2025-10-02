@@ -8,18 +8,17 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/hashicorp/vault/sdk/logical"
 	"github.com/nats-io/jwt/v2"
+	"github.com/openbao/openbao/sdk/v2/logical"
 	"github.com/stretchr/testify/assert"
 	"gonum.org/v1/gonum/stat/combin"
 
-	"github.com/edgefarm/vault-plugin-secrets-nats/pkg/claims/common"
-	userv1 "github.com/edgefarm/vault-plugin-secrets-nats/pkg/claims/user/v1alpha1"
-	"github.com/edgefarm/vault-plugin-secrets-nats/pkg/stm"
+	"github.com/NatzkaLabsOpenSource/openbao-plugin-secrets-nats/pkg/claims/common"
+	userv1 "github.com/NatzkaLabsOpenSource/openbao-plugin-secrets-nats/pkg/claims/user/v1alpha1"
+	"github.com/NatzkaLabsOpenSource/openbao-plugin-secrets-nats/pkg/stm"
 )
 
 func TestCRUDUserIssue(t *testing.T) {
-
 	b, reqStorage := getTestBackend(t)
 
 	t.Run("Test initial state of user issuer", func(t *testing.T) {
@@ -375,17 +374,6 @@ func TestCRUDUserIssue(t *testing.T) {
 		assert.False(t, resp.IsError())
 
 		//////////////////////////
-		// read the jwt
-		//////////////////////////
-		resp, err = b.HandleRequest(context.Background(), &logical.Request{
-			Operation: logical.ReadOperation,
-			Path:      "jwt/operator/op1/account/ac1/user/us1",
-			Storage:   reqStorage,
-		})
-		assert.NoError(t, err)
-		assert.False(t, resp.IsError())
-
-		//////////////////////////
 		// read the creds
 		//////////////////////////
 		resp, err = b.HandleRequest(context.Background(), &logical.Request{
@@ -423,17 +411,6 @@ func TestCRUDUserIssue(t *testing.T) {
 		assert.True(t, resp.IsError())
 
 		//////////////////////////
-		// read the jwt
-		//////////////////////////
-		resp, err = b.HandleRequest(context.Background(), &logical.Request{
-			Operation: logical.ReadOperation,
-			Path:      "jwt/operator/op1/account/ac1/user/us1",
-			Storage:   reqStorage,
-		})
-		assert.NoError(t, err)
-		assert.True(t, resp.IsError())
-
-		//////////////////////////
 		// read the creds
 		//////////////////////////
 		resp, err = b.HandleRequest(context.Background(), &logical.Request{
@@ -453,7 +430,6 @@ func TestCRUDUserIssue(t *testing.T) {
 		var path string = fmt.Sprintf("operator/op1/account/%s/user/%s", DefaultSysAccountName, DefaultPushUser)
 		var issueUserPath = "issue/" + path
 		var nkeyUserPath = "nkey/" + path
-		var jwtUserPath = "jwt/" + path
 		var credsUserPath = "creds/" + path
 		var request map[string]interface{}
 
@@ -518,17 +494,6 @@ func TestCRUDUserIssue(t *testing.T) {
 		assert.False(t, resp.IsError())
 
 		//////////////////////////
-		// read the jwt
-		//////////////////////////
-		resp, err = b.HandleRequest(context.Background(), &logical.Request{
-			Operation: logical.ReadOperation,
-			Path:      jwtUserPath,
-			Storage:   reqStorage,
-		})
-		assert.NoError(t, err)
-		assert.False(t, resp.IsError())
-
-		//////////////////////////
 		// read the creds
 		//////////////////////////
 		resp, err = b.HandleRequest(context.Background(), &logical.Request{
@@ -560,17 +525,6 @@ func TestCRUDUserIssue(t *testing.T) {
 		resp, err = b.HandleRequest(context.Background(), &logical.Request{
 			Operation: logical.ReadOperation,
 			Path:      nkeyUserPath,
-			Storage:   reqStorage,
-		})
-		assert.NoError(t, err)
-		assert.True(t, resp.IsError())
-
-		//////////////////////////
-		// read the jwt
-		//////////////////////////
-		resp, err = b.HandleRequest(context.Background(), &logical.Request{
-			Operation: logical.ReadOperation,
-			Path:      jwtUserPath,
 			Storage:   reqStorage,
 		})
 		assert.NoError(t, err)
@@ -680,14 +634,10 @@ func TestWithUserRandomizedOrder(t *testing.T) {
 		// Check default push-user issue (from sys account), nkey and jwt
 		err = listPath(b, reqStorage, "issue/operator/"+operatorName+"/account/"+DefaultSysAccountName+"/user/", map[string]interface{}{"keys": []string{DefaultPushUser}})
 		bailOutOnErr(t, identifier, err)
-		err = listPath(b, reqStorage, "jwt/operator/"+operatorName+"/account/"+DefaultSysAccountName+"/user/", map[string]interface{}{"keys": []string{DefaultPushUser}})
-		bailOutOnErr(t, identifier, err)
 		err = listPath(b, reqStorage, "nkey/operator/"+operatorName+"/account/"+DefaultSysAccountName+"/user/", map[string]interface{}{"keys": []string{DefaultPushUser}})
 		bailOutOnErr(t, identifier, err)
 		// Check user issue, nkey and jwt
 		err = listPath(b, reqStorage, "issue/operator/"+operatorName+"/account/"+accountName+"/user/", map[string]interface{}{"keys": []string{userName}})
-		bailOutOnErr(t, identifier, err)
-		err = listPath(b, reqStorage, "jwt/operator/"+operatorName+"/account/"+accountName+"/user/", map[string]interface{}{"keys": []string{userName}})
 		bailOutOnErr(t, identifier, err)
 		err = listPath(b, reqStorage, "nkey/operator/"+operatorName+"/account/"+accountName+"/user/", map[string]interface{}{"keys": []string{userName}})
 		bailOutOnErr(t, identifier, err)
@@ -698,10 +648,6 @@ func TestWithUserRandomizedOrder(t *testing.T) {
 		err = checkAccountJWTForOperator(b, reqStorage, operatorName, DefaultSysAccountName)
 		bailOutOnErr(t, identifier, err)
 		err = checkAccountJWTForOperator(b, reqStorage, operatorName, accountName)
-		bailOutOnErr(t, identifier, err)
-		err = checkUserJWTForAccount(b, reqStorage, operatorName, DefaultSysAccountName, DefaultPushUser)
-		bailOutOnErr(t, identifier, err)
-		err = checkUserJWTForAccount(b, reqStorage, operatorName, accountName, userName)
 		bailOutOnErr(t, identifier, err)
 	}
 
@@ -833,49 +779,6 @@ func checkAccountJWTForOperator(b *NatsBackend, reqStorage logical.Storage, oper
 	}
 	if accountClaims.Issuer != operatorClaims.Subject {
 		return fmt.Errorf("account JWT does not reference operator")
-	}
-	return nil
-}
-
-func checkUserJWTForAccount(b *NatsBackend, reqStorage logical.Storage, operatorName string, accountName string, userName string) error {
-	resp, err := b.HandleRequest(context.Background(), &logical.Request{
-		Operation: logical.ReadOperation,
-		Path:      "jwt/operator/" + operatorName + "/account/" + accountName,
-		Storage:   reqStorage,
-		Data:      map[string]interface{}{},
-	})
-	if err != nil {
-		return err
-	}
-	if resp.IsError() {
-		return fmt.Errorf("error reading account JWT: %s", resp.Error().Error())
-	}
-	var account JWTData
-	stm.MapToStruct(resp.Data, &account)
-	accountClaims, err := jwt.DecodeAccountClaims(account.JWT)
-	if err != nil {
-		return err
-	}
-	resp, err = b.HandleRequest(context.Background(), &logical.Request{
-		Operation: logical.ReadOperation,
-		Path:      "jwt/operator/" + operatorName + "/account/" + accountName + "/user/" + userName,
-		Storage:   reqStorage,
-		Data:      map[string]interface{}{},
-	})
-	if err != nil {
-		return err
-	}
-	if resp.IsError() {
-		return fmt.Errorf("error reading user JWT: %s", resp.Error().Error())
-	}
-	var user JWTData
-	stm.MapToStruct(resp.Data, &user)
-	userClaims, err := jwt.DecodeUserClaims(user.JWT)
-	if err != nil {
-		return err
-	}
-	if userClaims.Issuer != accountClaims.Subject {
-		return fmt.Errorf("user JWT does not reference account")
 	}
 	return nil
 }

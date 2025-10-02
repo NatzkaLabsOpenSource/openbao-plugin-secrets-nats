@@ -2,11 +2,10 @@ package v1alpha1
 
 import (
 	"fmt"
+	"slices"
 	"time"
 
-	"golang.org/x/exp/slices"
-
-	"github.com/edgefarm/vault-plugin-secrets-nats/pkg/claims/common"
+	"github.com/NatzkaLabsOpenSource/openbao-plugin-secrets-nats/pkg/claims/common"
 	"github.com/nats-io/jwt/v2"
 )
 

@@ -7,14 +7,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/edgefarm/vault-plugin-secrets-nats/pkg/resolver"
-	"github.com/edgefarm/vault-plugin-secrets-nats/pkg/stm"
-	"github.com/hashicorp/vault/sdk/framework"
-	"github.com/hashicorp/vault/sdk/logical"
+	"github.com/NatzkaLabsOpenSource/openbao-plugin-secrets-nats/pkg/resolver"
+	"github.com/NatzkaLabsOpenSource/openbao-plugin-secrets-nats/pkg/stm"
 	"github.com/nats-io/nkeys"
+	"github.com/openbao/openbao/sdk/v2/framework"
+	"github.com/openbao/openbao/sdk/v2/logical"
 	"github.com/rs/zerolog/log"
 
-	v1alpha1 "github.com/edgefarm/vault-plugin-secrets-nats/pkg/claims/account/v1alpha1"
+	v1alpha1 "github.com/NatzkaLabsOpenSource/openbao-plugin-secrets-nats/pkg/claims/account/v1alpha1"
 )
 
 type IssueAccountStorage struct {
@@ -655,19 +655,29 @@ func refreshAccountResolver(ctx context.Context, storage logical.Storage, issue 
 		return nil
 	}
 
-	// read system account user jwt
-	sysUserJWT, err := readUserJWT(ctx, storage, JWTParameters{
+	// read system account user
+	sysUser, err := readUserIssue(ctx, storage, IssueUserParameters{
 		Operator: issue.Operator,
 		Account:  DefaultSysAccountName,
 		User:     DefaultPushUser,
 	})
 	if err != nil {
 		return err
-	} else if sysUserJWT == nil {
+	} else if sysUser == nil {
 		log.Warn().Str("operator", issue.Operator).
 			Str("account", issue.Account).
-			Msg("cannot sync account server: system account user jwt does not exist")
+			Msg("cannot sync account server: system account user does not exist")
 		return nil
+	}
+
+	// generate system user creds
+	sysUserCreds, err := issueUserCreds(ctx, storage, IssueUserParameters{
+		Operator: issue.Operator,
+		Account:  DefaultSysAccountName,
+		User:     DefaultPushUser,
+	})
+	if err != nil {
+		return err
 	}
 
 	// read system account user nkey
@@ -691,7 +701,7 @@ func refreshAccountResolver(ctx context.Context, storage logical.Storage, issue 
 	}
 
 	// connect to nats
-	resolver, err := resolver.NewResolver(op.Claims.AccountServerURL, []byte(sysUserJWT.JWT), sysUserKp)
+	resolver, err := resolver.NewResolver(op.Claims.AccountServerURL, []byte(sysUserCreds.jwt), sysUserKp)
 	if err != nil {
 		log.Warn().Str("operator", issue.Operator).
 			Str("account", issue.Account).

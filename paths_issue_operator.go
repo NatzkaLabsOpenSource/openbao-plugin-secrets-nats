@@ -5,16 +5,16 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/hashicorp/vault/sdk/framework"
-	"github.com/hashicorp/vault/sdk/logical"
 	"github.com/nats-io/jwt/v2"
 	"github.com/nats-io/nkeys"
+	"github.com/openbao/openbao/sdk/v2/framework"
+	"github.com/openbao/openbao/sdk/v2/logical"
 	"github.com/rs/zerolog/log"
 
-	accountv1 "github.com/edgefarm/vault-plugin-secrets-nats/pkg/claims/account/v1alpha1"
-	"github.com/edgefarm/vault-plugin-secrets-nats/pkg/claims/common"
-	operatorv1 "github.com/edgefarm/vault-plugin-secrets-nats/pkg/claims/operator/v1alpha1"
-	"github.com/edgefarm/vault-plugin-secrets-nats/pkg/stm"
+	accountv1 "github.com/NatzkaLabsOpenSource/openbao-plugin-secrets-nats/pkg/claims/account/v1alpha1"
+	"github.com/NatzkaLabsOpenSource/openbao-plugin-secrets-nats/pkg/claims/common"
+	operatorv1 "github.com/NatzkaLabsOpenSource/openbao-plugin-secrets-nats/pkg/claims/operator/v1alpha1"
+	"github.com/NatzkaLabsOpenSource/openbao-plugin-secrets-nats/pkg/stm"
 )
 
 type IssueOperatorStorage struct {
@@ -224,7 +224,7 @@ func refreshAccountResolvers(ctx context.Context, storage logical.Storage, issue
 		return err
 	}
 	if pushUser != nil {
-		if pushUser.Status.User.JWT {
+		if pushUser.Status.User.Nkey {
 			accounts, err := listAccountIssues(ctx, storage, issue.Operator)
 			if err != nil {
 				return err
@@ -240,7 +240,7 @@ func refreshAccountResolvers(ctx context.Context, storage logical.Storage, issue
 			}
 		} else {
 			// todo warning push user does not exist
-			log.Warn().Str("operator", issue.Operator).Msg("cannot refresh account resolvers, push user has no JWT yet")
+			log.Warn().Str("operator", issue.Operator).Msg("cannot refresh account resolvers, push user has no NKey yet")
 		}
 	} else {
 		// todo warning does not exist
@@ -611,7 +611,7 @@ func issueSystemAccount(ctx context.Context, storage logical.Storage, issue Issu
 		return err
 	}
 
-	// create system account user jwt and nkey
+	// create system account user NKey
 	err = addUserIssue(ctx, storage, IssueUserParameters{
 		Operator: issue.Operator,
 		Account:  DefaultSysAccountName,
@@ -696,12 +696,12 @@ func getIssueOperatorStatus(ctx context.Context, storage logical.Storage, issue 
 	if err == nil && nkey != nil {
 		status.SystemAccountUser.Nkey = true
 	}
-	jwt, err = readUserJWT(ctx, storage, JWTParameters{
+	user, err := readUserIssue(ctx, storage, IssueUserParameters{
 		Operator: issue.Operator,
 		Account:  DefaultSysAccountName,
 		User:     DefaultPushUser,
 	})
-	if err == nil && jwt != nil {
+	if err == nil && user != nil {
 		status.SystemAccountUser.JWT = true
 	}
 	return &status
