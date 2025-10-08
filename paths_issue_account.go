@@ -9,6 +9,7 @@ import (
 
 	"github.com/NatzkaLabsOpenSource/openbao-plugin-secrets-nats/pkg/resolver"
 	"github.com/NatzkaLabsOpenSource/openbao-plugin-secrets-nats/pkg/stm"
+	"github.com/nats-io/jwt/v2"
 	"github.com/nats-io/nkeys"
 	"github.com/openbao/openbao/sdk/v2/framework"
 	"github.com/openbao/openbao/sdk/v2/logical"
@@ -18,34 +19,38 @@ import (
 )
 
 type IssueAccountStorage struct {
-	Operator      string                 `json:"operator"`
-	Account       string                 `json:"account"`
-	UseSigningKey string                 `json:"useSigningKey"`
-	Claims        v1alpha1.AccountClaims `json:"claims"`
-	Status        IssueAccountStatus     `json:"status"`
+	Operator       string                 `json:"operator"`
+	Account        string                 `json:"account"`
+	UseSigningKey  string                 `json:"useSigningKey"`
+	RevocationsTTL int64                  `json:"revocationsTTL"`
+	Claims         v1alpha1.AccountClaims `json:"claims"`
+	Status         IssueAccountStatus     `json:"status"`
 }
 
 // IssueAccountParameters is the user facing interface for configuring an account issue.
 // Using pascal case on purpose.
 // +k8s:deepcopy-gen=true
 type IssueAccountParameters struct {
-	Operator      string                 `json:"operator"`
-	Account       string                 `json:"account"`
-	UseSigningKey string                 `json:"useSigningKey,omitempty"`
-	Claims        v1alpha1.AccountClaims `json:"claims,omitempty"`
+	Operator       string                 `json:"operator"`
+	Account        string                 `json:"account"`
+	UseSigningKey  string                 `json:"useSigningKey,omitempty"`
+	RevocationsTTL int64                  `json:"revocationsTTL,omitempty"`
+	Claims         v1alpha1.AccountClaims `json:"claims,omitempty"`
 }
 
 type IssueAccountData struct {
-	Operator      string                 `json:"operator"`
-	Account       string                 `json:"account"`
-	UseSigningKey string                 `json:"useSigningKey"`
-	Claims        v1alpha1.AccountClaims `json:"claims"`
-	Status        IssueAccountStatus     `json:"status"`
+	Operator       string                 `json:"operator"`
+	Account        string                 `json:"account"`
+	UseSigningKey  string                 `json:"useSigningKey"`
+	RevocationsTTL int64                  `json:"revocationsTTL"`
+	Claims         v1alpha1.AccountClaims `json:"claims"`
+	Status         IssueAccountStatus     `json:"status"`
 }
 
 type IssueAccountStatus struct {
 	Account       IssueStatus         `json:"account"`
 	AccountServer AccountServerStatus `json:"accountServer"`
+	Revocations   map[string]int64    `json:"revocations"`
 }
 
 type AccountServerStatus struct {
@@ -76,6 +81,11 @@ func pathAccountIssue(b *NatsBackend) []*framework.Path {
 				"claims": {
 					Type:        framework.TypeMap,
 					Description: "Account claims (jwt.AccountClaims from github.com/nats-io/jwt/v2)",
+					Required:    false,
+				},
+				"revocationsTTL": {
+					Type:        framework.TypeInt,
+					Description: "How long the managed revocations (from deleted users) should be kept for, in seconds",
 					Required:    false,
 				},
 			},
@@ -224,6 +234,9 @@ func refreshAccount(ctx context.Context, storage logical.Storage, issue *IssueAc
 		return err
 	}
 
+	// expire any managed revocations
+	expireRevocations(issue)
+
 	// create jwt
 	err = issueAccountJWT(ctx, storage, *issue)
 	if err != nil {
@@ -362,6 +375,8 @@ func storeAccountIssue(ctx context.Context, storage logical.Storage, params Issu
 	issue.Operator = params.Operator
 	issue.Account = params.Account
 	issue.UseSigningKey = params.UseSigningKey
+	issue.RevocationsTTL = params.RevocationsTTL
+
 	err = storeInStorage(ctx, storage, path, issue)
 	if err != nil {
 		return nil, err
@@ -553,6 +568,18 @@ func issueAccountJWT(ctx context.Context, storage logical.Storage, issue IssueAc
 	if err != nil {
 		return fmt.Errorf("could not convert claims to nats jwt: %s", err)
 	}
+
+	// Append managed revocations
+	if len(issue.Status.Revocations) > 0 {
+		if natsJwt.Revocations == nil {
+			natsJwt.Revocations = make(jwt.RevocationList)
+		}
+
+		for key, exp := range issue.Status.Revocations {
+			natsJwt.Revocations[key] = exp
+		}
+	}
+
 	token, err := natsJwt.Encode(signingKeyPair)
 	if err != nil {
 		return fmt.Errorf("could not encode account jwt: %s", err)
@@ -791,11 +818,12 @@ func getAccountIssuePath(operator string, account string) string {
 
 func createResponseIssueAccountData(issue *IssueAccountStorage) (*logical.Response, error) {
 	data := &IssueAccountData{
-		Operator:      issue.Operator,
-		Account:       issue.Account,
-		UseSigningKey: issue.UseSigningKey,
-		Claims:        issue.Claims,
-		Status:        issue.Status,
+		Operator:       issue.Operator,
+		Account:        issue.Account,
+		UseSigningKey:  issue.UseSigningKey,
+		RevocationsTTL: issue.RevocationsTTL,
+		Claims:         issue.Claims,
+		Status:         issue.Status,
 	}
 
 	rval := map[string]interface{}{}
@@ -808,6 +836,32 @@ func createResponseIssueAccountData(issue *IssueAccountStorage) (*logical.Respon
 		Data: rval,
 	}
 	return resp, nil
+}
+
+func anyExpiredRevocations(issue *IssueAccountStorage) bool {
+	if issue.RevocationsTTL > 0 && issue.Status.Revocations != nil {
+		revokeOlderThan := time.Now().Add((-1) * time.Duration(issue.RevocationsTTL) * time.Second).Unix()
+
+		for _, exp := range issue.Status.Revocations {
+			if exp < revokeOlderThan {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+func expireRevocations(issue *IssueAccountStorage) {
+	if issue.RevocationsTTL > 0 && issue.Status.Revocations != nil {
+		revokeOlderThan := time.Now().Add((-1) * time.Duration(issue.RevocationsTTL) * time.Second).Unix()
+
+		for key, exp := range issue.Status.Revocations {
+			if exp < revokeOlderThan {
+				delete(issue.Status.Revocations, key)
+			}
+		}
+	}
 }
 
 func updateAccountStatus(ctx context.Context, storage logical.Storage, issue *IssueAccountStorage) error {
@@ -873,11 +927,13 @@ func addUserToRevocationList(ctx context.Context, storage logical.Storage, accou
 	if err != nil {
 		return err
 	}
+
 	// add user to revocation list and store
-	if account.Claims.Revocations == nil {
-		account.Claims.Revocations = map[string]int64{}
+	if account.Status.Revocations == nil {
+		account.Status.Revocations = make(map[string]int64)
 	}
-	account.Claims.Revocations[userPubKey] = time.Now().Unix()
+	account.Status.Revocations[userPubKey] = time.Now().Unix()
+
 	path := getAccountIssuePath(account.Operator, account.Account)
 	err = storeInStorage(ctx, storage, path, &account)
 	if err != nil {

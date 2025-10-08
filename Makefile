@@ -48,8 +48,14 @@ test:
 
 example:
 	VAULT_ADDR='http://127.0.0.1:8200' example/config.sh
+	docker kill nats
+	docker network rm nats
 
-example-keep-running:
-	KEEP_RUNNING="1" VAULT_ADDR='http://127.0.0.1:8200' example/config.sh
+example-start:
+	VAULT_ADDR='http://127.0.0.1:8200' example/config.sh
 
-.PHONY: build clean fmt start enable test generate
+example-stop:
+	docker kill nats
+	docker network rm nats
+
+.PHONY: build clean fmt start enable test generate example example-start example-stop
