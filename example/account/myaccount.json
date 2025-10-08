@@ -1,4 +1,5 @@
 {
+  "revocationsTTL": 5,
   "claims": {
     "account": {
       "limits": {

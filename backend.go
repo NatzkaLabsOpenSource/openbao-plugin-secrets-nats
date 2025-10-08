@@ -310,7 +310,7 @@ func (b *NatsBackend) periodicRefreshAccountIssues(ctx context.Context, storage 
 			nkeyMissing = true
 		}
 
-		if jwtMissing || nkeyMissing {
+		if jwtMissing || nkeyMissing || anyExpiredRevocations(issue) {
 			if err := refreshAccount(ctx, storage, issue); err != nil {
 				return err
 			}

@@ -41,11 +41,5 @@ echo -e "${BGREEN}> Exporting user creds file${NC}"
 vault read -field creds nats-secrets/creds/operator/myop/account/myaccount/user/user > creds
 echo -e "${BGREEN}> Publishing using user creds file${NC}"
 docker run --rm -it --name nats-box --network nats -v $(pwd)/creds:/creds natsio/nats-box:0.18.1 nats pub -s nats://nats:4222 --creds /creds foo bar
-echo -e "${BGREEN}> Cleaning up...${NC}"
-
-if [[ "$KEEP_RUNNING" != "1" ]]; then
-  docker kill nats
-  docker network rm nats
-fi
 
 echo -e "${BGREEN}> done.${NC}"    

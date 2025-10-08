@@ -372,6 +372,7 @@ func TestCRUDUserIssue(t *testing.T) {
 		})
 		assert.NoError(t, err)
 		assert.False(t, resp.IsError())
+		publicNKey := resp.Data["publicKey"].(string)
 
 		//////////////////////////
 		// read the creds
@@ -420,6 +421,40 @@ func TestCRUDUserIssue(t *testing.T) {
 		})
 		assert.NoError(t, err)
 		assert.True(t, resp.IsError())
+
+		//////////////////////////
+		// check if revocation was recorded
+		//////////////////////////
+		resp, err = b.HandleRequest(context.Background(), &logical.Request{
+			Operation: logical.ReadOperation,
+			Path:      "issue/operator/op1/account/ac1",
+			Storage:   reqStorage,
+		})
+		assert.NoError(t, err)
+		assert.False(t, resp.IsError())
+
+		status := resp.Data["status"].(map[string]interface{})
+		revocations := status["revocations"].(map[string]interface{})
+		assert.Contains(t, revocations, publicNKey)
+
+		revocation := revocations[publicNKey].(float64)
+		assert.Greater(t, revocation, 0.0)
+
+		//////////////////////////
+		// check if revocation has updated the account JWT
+		//////////////////////////
+		resp, err = b.HandleRequest(context.Background(), &logical.Request{
+			Operation: logical.ReadOperation,
+			Path:      "jwt/operator/op1/account/ac1",
+			Storage:   reqStorage,
+		})
+		assert.NoError(t, err)
+		assert.False(t, resp.IsError())
+
+		claims, err := jwt.DecodeAccountClaims(resp.Data["jwt"].(string))
+		assert.NoError(t, err)
+		assert.Contains(t, claims.Revocations, publicNKey)
+		assert.Greater(t, claims.Revocations[publicNKey], int64(0))
 	})
 
 	t.Run("Test sys account with default-push user", func(t *testing.T) {

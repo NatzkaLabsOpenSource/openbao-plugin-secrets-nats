@@ -22,7 +22,7 @@ type IssueUserStorage struct {
 	User          string              `json:"user"`
 	UseSigningKey string              `json:"useSigningKey"`
 	Claims        v1alpha1.UserClaims `json:"claims"`
-	CredsTTL      int64               `json:"credsTTL,omitempty"`
+	CredsTTL      int64               `json:"credsTTL"`
 	Status        IssueUserStatus     `json:"status"`
 }
 
@@ -44,7 +44,7 @@ type IssueUserData struct {
 	User          string              `json:"user"`
 	UseSigningKey string              `json:"useSigningKey"`
 	Claims        v1alpha1.UserClaims `json:"claims"`
-	CredsTTL      int64               `json:"credsTTL,omitempty"`
+	CredsTTL      int64               `json:"credsTTL"`
 	Status        IssueUserStatus     `json:"status"`
 }
 

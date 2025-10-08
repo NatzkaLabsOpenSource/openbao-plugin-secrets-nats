@@ -56,7 +56,6 @@ func TestCRUDAccountIssue(t *testing.T) {
 		assert.NoError(t, err)
 		assert.False(t, resp.IsError())
 		assert.Equal(t, resp.Data, map[string]interface{}{})
-
 	})
 
 	t.Run("Test CRUD logic for account issuer", func(t *testing.T) {
@@ -134,6 +133,7 @@ func TestCRUDAccountIssue(t *testing.T) {
 		// That will be requested
 		//////////////////////////
 		issue := IssueAccountParameters{
+			RevocationsTTL: 5,
 			Claims: accountv1.AccountClaims{
 				Account: accountv1.Account{
 					Limits: accountv1.OperatorLimits{
@@ -152,8 +152,9 @@ func TestCRUDAccountIssue(t *testing.T) {
 		// That will be expected
 		//////////////////////////
 		expected = IssueAccountData{
-			Operator: "op1",
-			Account:  "ac1",
+			Operator:       "op1",
+			Account:        "ac1",
+			RevocationsTTL: 5,
 			Claims: accountv1.AccountClaims{
 				Account: accountv1.Account{
 					Limits: accountv1.OperatorLimits{
