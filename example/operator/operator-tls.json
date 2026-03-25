@@ -1,0 +1,13 @@
+{
+    "syncAccountServer": true,
+    "tlsCaCert": "-----BEGIN CERTIFICATE-----\n<PEM-encoded CA certificate>\n-----END CERTIFICATE-----\n",
+    "tlsFirst": true,
+    "claims": {
+        "operator": {
+            "accountServerUrl": "tls://nats.example.com:4222",
+            "signingKeys": [
+                "opsk1"
+            ]
+        }
+    }
+}

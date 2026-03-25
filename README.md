@@ -116,6 +116,10 @@ Issues can be created with an imported nkey. If the nkey is not present during t
 | ----------------- | ----------- | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------ |
 | syncAccountServer | bool        | false    | false   | If set to true, the plugin will push the generated credentials to the configured account server.                         |
 | claims            | json string | false    | {}      | Claims to be added to the operator's JWT. See [pkg/claims/operator/v1alpha1/api.go](pkg/claims/operator/v1alpha1/api.go) |
+| tlsCaCert         | string      | false    | ""      | PEM-encoded CA certificate for verifying the account server's TLS certificate. When set, TLS is enabled for the push connection. If empty and the URL scheme is `tls://`, the system CA pool is used. |
+| tlsClientCert     | string      | false    | ""      | PEM-encoded client certificate for mTLS authentication to the account server (optional).                                 |
+| tlsClientKey      | string      | false    | ""      | PEM-encoded client private key for mTLS authentication to the account server (optional).                                 |
+| tlsFirst          | bool        | false    | false   | Perform TLS handshake before any NATS protocol exchange. Required when the NATS server uses `handshake_first: true`.     |
 
 #### **Account**
 
@@ -157,6 +161,26 @@ The default name of the system account is `sys`. If you want to use a different 
 Within the `sys` account the only user that is capable of pushing credentials to the account server is the `default-push` user. 
 
 See the `example/sysaccount` directory for an example configuration of both `sys` account and `default-push` user.
+
+### 🔒 TLS support for account server push
+
+When running a NATS server with TLS enabled, the plugin must be configured with TLS settings to push account JWTs to the resolver. This is configured at the operator level.
+
+Use `tls://` as the URL scheme in `accountServerUrl` and set the TLS fields on the operator issue:
+
+```console
+$ vault write nats-secrets/issue/operator/myop @example/operator/operator-tls.json
+```
+
+See [example/operator/operator-tls.json](example/operator/operator-tls.json) for a full example.
+
+The key fields are:
+
+- **`tlsCaCert`** — PEM-encoded CA certificate. Required if the NATS server uses a self-signed or private CA. If omitted, the system CA pool is used.
+- **`tlsFirst`** — Set to `true` when the NATS server is configured with `handshake_first: true`. This performs the TLS handshake before any NATS protocol exchange, preventing protocol downgrade attacks.
+- **`tlsClientCert`** / **`tlsClientKey`** — Optional. For mTLS authentication where the NATS server requires a client certificate.
+
+The rest of the setup (sys account, push user, tenant accounts) is identical to the non-TLS flow. Only the operator issue configuration changes.
 
 ## 🎯 Installation and Setup
 

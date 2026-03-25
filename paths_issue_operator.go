@@ -22,6 +22,10 @@ type IssueOperatorStorage struct {
 	CreateSystemAccount bool                      `json:"createSystemAccount"`
 	SyncAccountServer   bool                      `json:"syncAccountServer"`
 	Claims              operatorv1.OperatorClaims `json:"claims"`
+	TLSCACert           string                    `json:"tlsCaCert,omitempty"`
+	TLSClientCert       string                    `json:"tlsClientCert,omitempty"`
+	TLSClientKey        string                    `json:"tlsClientKey,omitempty"`
+	TLSFirst            bool                      `json:"tlsFirst,omitempty"`
 }
 
 // IssueOperatorParameters
@@ -31,6 +35,10 @@ type IssueOperatorParameters struct {
 	CreateSystemAccount bool                      `json:"createSystemAccount,omitempty"`
 	SyncAccountServer   bool                      `json:"syncAccountServer,omitempty"`
 	Claims              operatorv1.OperatorClaims `json:"claims,omitempty"`
+	TLSCACert           string                    `json:"tlsCaCert,omitempty"`
+	TLSClientCert       string                    `json:"tlsClientCert,omitempty"`
+	TLSClientKey        string                    `json:"tlsClientKey,omitempty"`
+	TLSFirst            bool                      `json:"tlsFirst,omitempty"`
 }
 
 type IssueOperatorData struct {
@@ -39,6 +47,10 @@ type IssueOperatorData struct {
 	SyncAccountServer   bool                      `json:"syncAccountServer"`
 	Claims              operatorv1.OperatorClaims `json:"claims"`
 	Status              IssueOperatorStatus       `json:"status"`
+	TLSCACert           string                    `json:"tlsCaCert,omitempty"`
+	TLSClientCert       string                    `json:"tlsClientCert,omitempty"`
+	TLSClientKey        string                    `json:"tlsClientKey,omitempty"`
+	TLSFirst            bool                      `json:"tlsFirst,omitempty"`
 }
 
 type IssueOperatorStatus struct {
@@ -75,6 +87,26 @@ func pathOperatorIssue(b *NatsBackend) []*framework.Path {
 				"syncAccountServer": {
 					Type:        framework.TypeBool,
 					Description: "Sync account jwt's with account server",
+					Required:    false,
+				},
+				"tlsCaCert": {
+					Type:        framework.TypeString,
+					Description: "PEM-encoded CA certificate for verifying the account server's TLS certificate",
+					Required:    false,
+				},
+				"tlsClientCert": {
+					Type:        framework.TypeString,
+					Description: "PEM-encoded client certificate for mTLS authentication to the account server",
+					Required:    false,
+				},
+				"tlsClientKey": {
+					Type:        framework.TypeString,
+					Description: "PEM-encoded client private key for mTLS authentication to the account server",
+					Required:    false,
+				},
+				"tlsFirst": {
+					Type:        framework.TypeBool,
+					Description: "Perform TLS handshake before NATS protocol exchange (required when server uses handshake_first)",
 					Required:    false,
 				},
 			},
@@ -390,6 +422,10 @@ func storeOperatorIssue(ctx context.Context, storage logical.Storage, params Iss
 	issue.Claims.SigningKeys = params.Claims.SigningKeys
 	issue.Claims.AccountServerURL = params.Claims.AccountServerURL
 	issue.SyncAccountServer = params.SyncAccountServer
+	issue.TLSCACert = params.TLSCACert
+	issue.TLSClientCert = params.TLSClientCert
+	issue.TLSClientKey = params.TLSClientKey
+	issue.TLSFirst = params.TLSFirst
 	err = storeInStorage(ctx, storage, path, issue)
 	if err != nil {
 		return nil, err
@@ -714,6 +750,10 @@ func createResponseIssueOperatorData(issue *IssueOperatorStorage, status *IssueO
 		SyncAccountServer:   issue.SyncAccountServer,
 		Claims:              issue.Claims,
 		Status:              *status,
+		TLSCACert:           issue.TLSCACert,
+		TLSClientCert:       issue.TLSClientCert,
+		TLSClientKey:        issue.TLSClientKey,
+		TLSFirst:            issue.TLSFirst,
 	}
 
 	rval := map[string]interface{}{}
