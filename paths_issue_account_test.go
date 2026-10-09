@@ -501,7 +501,7 @@ func TestAccountBeforeOperatorCreatingSysAccount(t *testing.T) {
 			"keys": []string{"ac1", "ac2", DefaultSysAccountName},
 		}, resp.Data)
 
-		// 3.3a check account acc1 JWT that issuer is operator public key
+		// 3.3a check account acc1 JWT that issuer is operator public key and name is the account name
 		resp, err = b.HandleRequest(context.Background(), &logical.Request{
 			Operation: logical.ReadOperation,
 			Path:      "jwt/operator/op1/account/ac1",
@@ -515,11 +515,12 @@ func TestAccountBeforeOperatorCreatingSysAccount(t *testing.T) {
 		ac1Claims, err := jwt.DecodeAccountClaims(acountJWT.JWT)
 		assert.NoError(t, err)
 		assert.Equal(t, ac1Claims.Issuer, op1Claims.Subject)
+		assert.Equal(t, "ac1", ac1Claims.Name)
 
-		// 3.3b check accounts acc2 JWT that issuer is operator public key
+		// 3.3b check accounts acc2 JWT that issuer is operator public key and name is the account name
 		resp, err = b.HandleRequest(context.Background(), &logical.Request{
 			Operation: logical.ReadOperation,
-			Path:      "jwt/operator/op1/account/ac1",
+			Path:      "jwt/operator/op1/account/ac2",
 			Storage:   reqStorage,
 			Data:      map[string]interface{}{},
 		})
@@ -529,6 +530,7 @@ func TestAccountBeforeOperatorCreatingSysAccount(t *testing.T) {
 		ac2Claims, err := jwt.DecodeAccountClaims(acountJWT.JWT)
 		assert.NoError(t, err)
 		assert.Equal(t, ac2Claims.Issuer, op1Claims.Subject)
+		assert.Equal(t, "ac2", ac2Claims.Name)
 
 	})
 }

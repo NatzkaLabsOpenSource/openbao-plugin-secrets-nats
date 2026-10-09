@@ -562,6 +562,7 @@ func issueAccountJWT(ctx context.Context, storage logical.Storage, issue IssueAc
 	issue.Claims.ClaimsData.Subject = accountPublicKey
 	issue.Claims.ClaimsData.Issuer = signingPublicKey
 	issue.Claims.ClaimsData.IssuedAt = time.Now().Unix()
+	issue.Claims.ClaimsData.Name = issue.Account
 	// TODO: dont know how to handle scopes of signing keys
 	issue.Claims.Account.SigningKeys = signingPublicKeys
 	natsJwt, err := v1alpha1.Convert(&issue.Claims)
