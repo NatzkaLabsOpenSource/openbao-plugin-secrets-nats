@@ -41,6 +41,7 @@ type IssueOperatorParameters struct {
 	TLSFirst            bool                      `json:"tlsFirst,omitempty"`
 }
 
+// IssueOperatorData is the read response. tlsClientKey is write-only and never returned.
 type IssueOperatorData struct {
 	Operator            string                    `json:"operator"`
 	CreateSystemAccount bool                      `json:"createSystemAccount"`
@@ -49,7 +50,6 @@ type IssueOperatorData struct {
 	Status              IssueOperatorStatus       `json:"status"`
 	TLSCACert           string                    `json:"tlsCaCert,omitempty"`
 	TLSClientCert       string                    `json:"tlsClientCert,omitempty"`
-	TLSClientKey        string                    `json:"tlsClientKey,omitempty"`
 	TLSFirst            bool                      `json:"tlsFirst,omitempty"`
 }
 
@@ -752,7 +752,6 @@ func createResponseIssueOperatorData(issue *IssueOperatorStorage, status *IssueO
 		Status:              *status,
 		TLSCACert:           issue.TLSCACert,
 		TLSClientCert:       issue.TLSClientCert,
-		TLSClientKey:        issue.TLSClientKey,
 		TLSFirst:            issue.TLSFirst,
 	}
 

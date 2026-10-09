@@ -110,126 +110,109 @@ func generateTestCert(t *testing.T) (caCertPEM, caKeyPEM, clientCertPEM, clientK
 	return
 }
 
-func TestTlsOptions_Nil(t *testing.T) {
-	opts := tlsOptions(nil)
-	assert.Nil(t, opts)
-}
-
-func TestTlsOptions_CACertOnly(t *testing.T) {
-	caCert, _, _, _ := generateTestCert(t)
-
-	opts := tlsOptions(&TLSConfig{
-		CACert: caCert,
-	})
-
-	// Should have exactly 1 option: nats.Secure(tc)
-	assert.Len(t, opts, 1)
-}
-
-func TestTlsOptions_CACertWithTLSFirst(t *testing.T) {
-	caCert, _, _, _ := generateTestCert(t)
-
-	opts := tlsOptions(&TLSConfig{
-		CACert:   caCert,
-		TLSFirst: true,
-	})
-
-	// Should have 2 options: nats.Secure(tc) + nats.TLSHandshakeFirst()
-	assert.Len(t, opts, 2)
-}
-
-func TestTlsOptions_CACertWithClientCert(t *testing.T) {
-	caCert, _, clientCert, clientKey := generateTestCert(t)
-
-	opts := tlsOptions(&TLSConfig{
-		CACert:     caCert,
-		ClientCert: clientCert,
-		ClientKey:  clientKey,
-	})
-
-	// Should have 1 option: nats.Secure(tc) with client cert embedded
-	assert.Len(t, opts, 1)
-}
-
-func TestTlsOptions_TLSFirstOnly(t *testing.T) {
-	opts := tlsOptions(&TLSConfig{
-		TLSFirst: true,
-	})
-
-	// Should have 2 options: nats.Secure() (system CA) + nats.TLSHandshakeFirst()
-	assert.Len(t, opts, 2)
-}
-
-func TestTlsOptions_NoCACert(t *testing.T) {
-	opts := tlsOptions(&TLSConfig{})
-
-	// Empty config with no CACert should still enable TLS with system CA pool
-	assert.Len(t, opts, 1)
-}
-
-func TestTlsOptions_InvalidCACert(t *testing.T) {
-	opts := tlsOptions(&TLSConfig{
-		CACert: "not-a-valid-pem",
-	})
-
-	// Should still return an option (with empty pool), just logs a warning
-	assert.Len(t, opts, 1)
-}
-
-func TestTlsOptions_InvalidClientCert(t *testing.T) {
-	caCert, _, _, _ := generateTestCert(t)
-
-	opts := tlsOptions(&TLSConfig{
-		CACert:     caCert,
-		ClientCert: "not-a-valid-cert",
-		ClientKey:  "not-a-valid-key",
-	})
-
-	// Should still return the CA option, just logs an error for client cert
-	assert.Len(t, opts, 1)
-}
-
-func TestTlsOptions_ApplyToNatsConn(t *testing.T) {
-	// Verify that the generated options are valid nats.Option functions
-	// by applying them to a nats.Options struct
-	caCert, _, clientCert, clientKey := generateTestCert(t)
-
-	opts := tlsOptions(&TLSConfig{
-		CACert:     caCert,
-		ClientCert: clientCert,
-		ClientKey:  clientKey,
-		TLSFirst:   true,
-	})
-
+// applyTLS builds the TLS options and applies them, returning the resulting nats.Options.
+func applyTLS(t *testing.T, cfg *TLSConfig) (*nats.Options, error) {
+	t.Helper()
+	opts, err := tlsOptions(cfg)
+	if err != nil {
+		return nil, err
+	}
 	natsOpts := &nats.Options{}
 	for _, opt := range opts {
-		err := opt(natsOpts)
-		assert.NoError(t, err)
+		require.NoError(t, opt(natsOpts))
 	}
-
-	assert.True(t, natsOpts.TLSHandshakeFirst)
-	assert.NotNil(t, natsOpts.TLSConfig)
-	assert.NotNil(t, natsOpts.TLSConfig.RootCAs)
-	assert.Len(t, natsOpts.TLSConfig.Certificates, 1)
+	return natsOpts, nil
 }
 
-func TestTlsOptions_CACertOnlyApply(t *testing.T) {
-	caCert, _, _, _ := generateTestCert(t)
+func TestTlsOptions(t *testing.T) {
+	caCert, _, clientCert, clientKey := generateTestCert(t)
 
-	opts := tlsOptions(&TLSConfig{
-		CACert: caCert,
-	})
-
-	natsOpts := &nats.Options{}
-	for _, opt := range opts {
-		err := opt(natsOpts)
-		assert.NoError(t, err)
+	tests := []struct {
+		name          string
+		cfg           *TLSConfig
+		secure        bool
+		handshake     bool
+		customRootCAs bool
+		clientCerts   int
+	}{
+		{
+			// nats.go still upgrades on tls:// or when the server requires TLS
+			name: "nil config adds nothing",
+			cfg:  nil,
+		},
+		{
+			name: "empty config adds nothing",
+			cfg:  &TLSConfig{},
+		},
+		{
+			name:      "tls first alone uses system CA pool",
+			cfg:       &TLSConfig{TLSFirst: true},
+			secure:    true,
+			handshake: true,
+		},
+		{
+			name:          "ca cert only",
+			cfg:           &TLSConfig{CACert: caCert},
+			secure:        true,
+			customRootCAs: true,
+		},
+		{
+			name:        "client cert without ca cert",
+			cfg:         &TLSConfig{ClientCert: clientCert, ClientKey: clientKey},
+			secure:      true,
+			clientCerts: 1,
+		},
+		{
+			name:          "everything",
+			cfg:           &TLSConfig{CACert: caCert, ClientCert: clientCert, ClientKey: clientKey, TLSFirst: true},
+			secure:        true,
+			handshake:     true,
+			customRootCAs: true,
+			clientCerts:   1,
+		},
 	}
 
-	assert.False(t, natsOpts.TLSHandshakeFirst)
-	assert.NotNil(t, natsOpts.TLSConfig)
-	assert.NotNil(t, natsOpts.TLSConfig.RootCAs)
-	assert.Empty(t, natsOpts.TLSConfig.Certificates)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			o, err := applyTLS(t, tt.cfg)
+			require.NoError(t, err)
+
+			assert.Equal(t, tt.secure, o.Secure)
+			assert.Equal(t, tt.handshake, o.TLSHandshakeFirst)
+
+			var rootCAs bool
+			var certs int
+			if o.TLSConfig != nil {
+				rootCAs = o.TLSConfig.RootCAs != nil
+				certs = len(o.TLSConfig.Certificates)
+			}
+			assert.Equal(t, tt.customRootCAs, rootCAs)
+			assert.Equal(t, tt.clientCerts, certs)
+		})
+	}
+}
+
+func TestTlsOptions_Errors(t *testing.T) {
+	_, _, clientCert, clientKey := generateTestCert(t)
+
+	tests := []struct {
+		name string
+		cfg  *TLSConfig
+		want string
+	}{
+		{"invalid ca cert", &TLSConfig{CACert: "not-a-valid-pem"}, "tlsCaCert"},
+		{"client cert without key", &TLSConfig{ClientCert: clientCert}, "must be set together"},
+		{"client key without cert", &TLSConfig{ClientKey: clientKey}, "must be set together"},
+		{"invalid keypair", &TLSConfig{ClientCert: "not-a-valid-cert", ClientKey: "not-a-valid-key"}, "cannot parse"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := tlsOptions(tt.cfg)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tt.want)
+		})
+	}
 }
 
 func TestCreateConnection_InvalidURL(t *testing.T) {
@@ -244,20 +227,8 @@ func TestCreateConnection_NonNatsURL(t *testing.T) {
 	assert.Contains(t, err.Error(), "only nats:// and tls://")
 }
 
-func TestCreateDefaultToolOptions_NilTLS(t *testing.T) {
-	opts := createDefaultToolOptions("test", nil)
-	// Should have: Name, Timeout, ReconnectWait, MaxReconnects,
-	// DisconnectErrHandler, ReconnectHandler, ClosedHandler = 7 options
-	assert.Len(t, opts, 7)
-}
-
-func TestCreateDefaultToolOptions_WithTLS(t *testing.T) {
-	caCert, _, _, _ := generateTestCert(t)
-
-	opts := createDefaultToolOptions("test", &TLSConfig{
-		CACert:   caCert,
-		TLSFirst: true,
-	})
-	// 7 base options + 2 TLS options (Secure + TLSHandshakeFirst) = 9
-	assert.Len(t, opts, 9)
+func TestCreateConnection_InvalidTLSFailsBeforeDialing(t *testing.T) {
+	_, err := createConnection("nats://127.0.0.1:1", nil, nil, &TLSConfig{CACert: "not-a-valid-pem"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid tls configuration")
 }

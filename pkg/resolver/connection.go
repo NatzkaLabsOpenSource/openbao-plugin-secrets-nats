@@ -3,6 +3,7 @@ package resolver
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"errors"
 	"fmt"
 	"net/url"
 	"strings"
@@ -48,6 +49,11 @@ func createConnection(url string, userJWT []byte, userKp nkeys.KeyPair, tlsCfg *
 		return nil, fmt.Errorf("invalid url: %s, only nats:// and tls:// urls are supported", url)
 	}
 
+	tlsOpts, err := tlsOptions(tlsCfg)
+	if err != nil {
+		return nil, fmt.Errorf("invalid tls configuration: %w", err)
+	}
+
 	nats.NewInbox()
 	getOpt := func(theJWT string, kp nkeys.KeyPair) nats.Option {
 		return nats.UserJWT(
@@ -58,17 +64,17 @@ func createConnection(url string, userJWT []byte, userKp nkeys.KeyPair, tlsCfg *
 			})
 	}
 
-	return nats.Connect(url, createDefaultToolOptions("nsc_push", tlsCfg, getOpt(string(userJWT), userKp))...)
+	opts := append(tlsOpts, getOpt(string(userJWT), userKp))
+	return nats.Connect(url, createDefaultToolOptions("nsc_push", opts...)...)
 }
 
-func createDefaultToolOptions(name string, tlsCfg *TLSConfig, o ...nats.Option) []nats.Option {
+func createDefaultToolOptions(name string, o ...nats.Option) []nats.Option {
 	connectTimeout := 5 * time.Second
 	totalWait := 10 * time.Minute
 	reconnectDelay := 2 * time.Second
 
 	opts := []nats.Option{nats.Name(name)}
 	opts = append(opts, nats.Timeout(connectTimeout))
-	opts = append(opts, tlsOptions(tlsCfg)...)
 	opts = append(opts, nats.ReconnectWait(reconnectDelay))
 	opts = append(opts, nats.MaxReconnects(int(totalWait/reconnectDelay)))
 	opts = append(opts, nats.DisconnectErrHandler(func(nc *nats.Conn, err error) {
@@ -94,40 +100,48 @@ func createDefaultToolOptions(name string, tlsCfg *TLSConfig, o ...nats.Option) 
 }
 
 // tlsOptions builds NATS TLS options from the provided TLSConfig.
-func tlsOptions(cfg *TLSConfig) []nats.Option {
+//
+// Every field is optional and independent. Without a CA certificate the system
+// trust store is used; with no field set no TLS option is added and nats.go
+// still upgrades to TLS when the URL scheme is tls:// or the server requires it.
+// Malformed PEM input is an error instead of being silently dropped.
+func tlsOptions(cfg *TLSConfig) ([]nats.Option, error) {
 	if cfg == nil {
-		return nil
+		return nil, nil
 	}
 
 	var opts []nats.Option
 
-	if cfg.CACert != "" {
-		certPool := x509.NewCertPool()
-		if !certPool.AppendCertsFromPEM([]byte(cfg.CACert)) {
-			log.Warn().Msg("resolver: failed to parse CA certificate, TLS server verification may fail")
+	if cfg.CACert != "" || cfg.ClientCert != "" || cfg.ClientKey != "" {
+		tc := &tls.Config{}
+
+		if cfg.CACert != "" {
+			certPool := x509.NewCertPool()
+			if !certPool.AppendCertsFromPEM([]byte(cfg.CACert)) {
+				return nil, errors.New("tlsCaCert does not contain a valid PEM certificate")
+			}
+			tc.RootCAs = certPool
 		}
-		tc := &tls.Config{
-			RootCAs: certPool,
-		}
-		if cfg.ClientCert != "" && cfg.ClientKey != "" {
+
+		if cfg.ClientCert != "" || cfg.ClientKey != "" {
+			if cfg.ClientCert == "" || cfg.ClientKey == "" {
+				return nil, errors.New("tlsClientCert and tlsClientKey must be set together")
+			}
 			cert, err := tls.X509KeyPair([]byte(cfg.ClientCert), []byte(cfg.ClientKey))
 			if err != nil {
-				log.Error().Err(err).Msg("resolver: failed to parse client certificate keypair")
-			} else {
-				tc.Certificates = []tls.Certificate{cert}
+				return nil, fmt.Errorf("cannot parse tlsClientCert/tlsClientKey: %w", err)
 			}
+			tc.Certificates = []tls.Certificate{cert}
 		}
+
 		opts = append(opts, nats.Secure(tc))
-	} else {
-		// No CA cert provided — use default system CA pool with TLS enabled.
-		opts = append(opts, nats.Secure())
 	}
 
 	if cfg.TLSFirst {
 		opts = append(opts, nats.TLSHandshakeFirst())
 	}
 
-	return opts
+	return opts, nil
 }
 
 func isValidURL(s string) bool {

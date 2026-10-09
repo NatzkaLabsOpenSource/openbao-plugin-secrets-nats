@@ -116,9 +116,9 @@ Issues can be created with an imported nkey. If the nkey is not present during t
 | ----------------- | ----------- | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------ |
 | syncAccountServer | bool        | false    | false   | If set to true, the plugin will push the generated credentials to the configured account server.                         |
 | claims            | json string | false    | {}      | Claims to be added to the operator's JWT. See [pkg/claims/operator/v1alpha1/api.go](pkg/claims/operator/v1alpha1/api.go) |
-| tlsCaCert         | string      | false    | ""      | PEM-encoded CA certificate for verifying the account server's TLS certificate. When set, TLS is enabled for the push connection. If empty and the URL scheme is `tls://`, the system CA pool is used. |
-| tlsClientCert     | string      | false    | ""      | PEM-encoded client certificate for mTLS authentication to the account server (optional).                                 |
-| tlsClientKey      | string      | false    | ""      | PEM-encoded client private key for mTLS authentication to the account server (optional).                                 |
+| tlsCaCert         | string      | false    | ""      | PEM-encoded CA certificate for verifying the account server's TLS certificate. Only needed for a self-signed or private CA; otherwise the system CA pool is used. |
+| tlsClientCert     | string      | false    | ""      | PEM-encoded client certificate for mTLS authentication to the account server. Must be set together with `tlsClientKey`.  |
+| tlsClientKey      | string      | false    | ""      | PEM-encoded client private key for mTLS authentication to the account server. Write-only: never returned on read.        |
 | tlsFirst          | bool        | false    | false   | Perform TLS handshake before any NATS protocol exchange. Required when the NATS server uses `handshake_first: true`.     |
 
 #### **Account**
@@ -164,21 +164,21 @@ See the `example/sysaccount` directory for an example configuration of both `sys
 
 ### 🔒 TLS support for account server push
 
-When running a NATS server with TLS enabled, the plugin must be configured with TLS settings to push account JWTs to the resolver. This is configured at the operator level.
+No TLS settings are needed to push account JWTs to a NATS server that requires TLS: the client upgrades the connection when the server asks for it, using the system CA pool. This works with both `nats://` and `tls://` URLs in `accountServerUrl` (`tls://` additionally refuses to connect without TLS).
 
-Use `tls://` as the URL scheme in `accountServerUrl` and set the TLS fields on the operator issue:
+Set the TLS fields on the operator issue only when you need to customize the connection:
+
+- **`tlsCaCert`** — PEM-encoded CA certificate. Needed if the NATS server uses a self-signed or private CA.
+- **`tlsFirst`** — Set to `true` when the NATS server is configured with `handshake_first: true`. Such a server expects the TLS handshake before any NATS protocol exchange, so the client must start with TLS.
+- **`tlsClientCert`** / **`tlsClientKey`** — For mTLS, when the NATS server requires a client certificate. Both must be set; they are independent of `tlsCaCert`. `tlsClientKey` is write-only and is not returned when reading the operator issue.
+
+All fields are independent of each other. Invalid PEM input makes the push fail with an explicit error.
 
 ```console
 $ vault write nats-secrets/issue/operator/myop @example/operator/operator-tls.json
 ```
 
-See [example/operator/operator-tls.json](example/operator/operator-tls.json) for a full example.
-
-The key fields are:
-
-- **`tlsCaCert`** — PEM-encoded CA certificate. Required if the NATS server uses a self-signed or private CA. If omitted, the system CA pool is used.
-- **`tlsFirst`** — Set to `true` when the NATS server is configured with `handshake_first: true`. This performs the TLS handshake before any NATS protocol exchange, preventing protocol downgrade attacks.
-- **`tlsClientCert`** / **`tlsClientKey`** — Optional. For mTLS authentication where the NATS server requires a client certificate.
+See [example/operator/operator-tls.json](example/operator/operator-tls.json) for an example with a private CA and `handshake_first`.
 
 The rest of the setup (sys account, push user, tenant accounts) is identical to the non-TLS flow. Only the operator issue configuration changes.
 
