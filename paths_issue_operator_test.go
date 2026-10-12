@@ -558,7 +558,16 @@ func TestCRUDOperatorIssue(t *testing.T) {
 			Storage:   reqStorage,
 		})
 		assert.NoError(t, err)
-		assert.True(t, resp.IsError())
+		assert.False(t, resp != nil && resp.IsError())
+
+		// the system account is deleted with the operator
+		resp, err = b.HandleRequest(context.Background(), &logical.Request{
+			Operation: logical.ListOperation,
+			Path:      "issue/operator/opsys/account",
+			Storage:   reqStorage,
+		})
+		assert.NoError(t, err)
+		assert.Empty(t, resp.Data["keys"])
 	})
 }
 

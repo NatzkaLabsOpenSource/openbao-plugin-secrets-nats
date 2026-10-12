@@ -959,6 +959,18 @@ func IsNatsUrl(url string) bool {
 	return strings.HasPrefix(url, "nats://") || strings.HasPrefix(url, ",nats://")
 }
 
+// accountSignerExists reports whether the operator key that signs the account JWT still exists.
+func accountSignerExists(ctx context.Context, storage logical.Storage, account *IssueAccountStorage) (bool, error) {
+	var nkey *NKeyStorage
+	var err error
+	if account.UseSigningKey == "" {
+		nkey, err = readOperatorNkey(ctx, storage, NkeyParameters{Operator: account.Operator})
+	} else {
+		nkey, err = readOperatorSigningNkey(ctx, storage, NkeyParameters{Operator: account.Operator, Signing: account.UseSigningKey})
+	}
+	return nkey != nil, err
+}
+
 func addUserToRevocationList(ctx context.Context, storage logical.Storage, account *IssueAccountStorage, user *IssueUserStorage) error {
 	// get user public key
 	userNkey, err := readUserNkey(ctx, storage, NkeyParameters{

@@ -342,10 +342,19 @@ func deleteUserIssue(ctx context.Context, storage logical.Storage, params IssueU
 		return err
 	}
 	if account != nil {
-		// add deleted user to revocation list and update the account JWT
-		err = addUserToRevocationList(ctx, storage, account, issue)
+		signable, err := accountSignerExists(ctx, storage, account)
 		if err != nil {
 			return err
+		}
+		if signable {
+			// add deleted user to revocation list and update the account JWT
+			err = addUserToRevocationList(ctx, storage, account, issue)
+			if err != nil {
+				return err
+			}
+		} else {
+			log.Warn().Str("operator", issue.Operator).Str("account", issue.Account).Str("user", issue.User).
+				Msg("account cannot be re-signed, deleting user without revocation")
 		}
 	}
 

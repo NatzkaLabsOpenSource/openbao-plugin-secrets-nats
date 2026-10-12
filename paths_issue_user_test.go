@@ -11,6 +11,7 @@ import (
 	"github.com/nats-io/jwt/v2"
 	"github.com/openbao/openbao/sdk/v2/logical"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"gonum.org/v1/gonum/stat/combin"
 
 	"github.com/NatzkaLabsOpenSource/openbao-plugin-secrets-nats/pkg/claims/common"
@@ -888,4 +889,22 @@ func Test_EverythingBeforeUser(t *testing.T) {
 		assert.NoError(t, err)
 		assert.False(t, resp.IsError())
 	})
+}
+
+func TestDeleteUserWithoutAccountSigner(t *testing.T) {
+	b, s := getTestBackend(t)
+	do := func(op logical.Operation, path string) *logical.Response {
+		resp, err := b.HandleRequest(context.Background(), &logical.Request{Operation: op, Path: path, Storage: s})
+		require.NoError(t, err)
+		return resp
+	}
+
+	do(logical.UpdateOperation, "issue/operator/op1")
+	do(logical.UpdateOperation, "issue/operator/op1/account/acc1")
+	do(logical.UpdateOperation, "issue/operator/op1/account/acc1/user/u1")
+	do(logical.DeleteOperation, "issue/operator/op1")
+
+	resp := do(logical.DeleteOperation, "issue/operator/op1/account/acc1/user/u1")
+	assert.False(t, resp != nil && resp.IsError(), "%v", resp)
+	assert.True(t, do(logical.ReadOperation, "issue/operator/op1/account/acc1/user/u1").IsError())
 }
