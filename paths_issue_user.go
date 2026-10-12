@@ -3,6 +3,7 @@ package natsbackend
 import (
 	"context"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/nats-io/jwt/v2"
@@ -233,6 +234,16 @@ func addUserIssue(ctx context.Context, storage logical.Storage, params IssueUser
 		Str("operator", params.Operator).Str("account", params.Account).Str("user", params.User).
 		Msgf("issue user")
 
+	if params.UseSigningKey != "" {
+		account, err := readAccountIssue(ctx, storage, IssueAccountParameters{Operator: params.Operator, Account: params.Account})
+		if err != nil {
+			return err
+		}
+		if account != nil && !slices.Contains(account.Claims.SigningKeys, params.UseSigningKey) {
+			return fmt.Errorf("account signing key %s does not exist", params.UseSigningKey)
+		}
+	}
+
 	// store issue
 	issue, err := storeUserIssue(ctx, storage, params)
 	if err != nil {
@@ -285,6 +296,24 @@ func readUserIssue(ctx context.Context, storage logical.Storage, params IssueUse
 func listUserIssues(ctx context.Context, storage logical.Storage, params IssueUserParameters) ([]string, error) {
 	path := getUserIssuePath(params.Operator, params.Account, "")
 	return listIssues(ctx, storage, path)
+}
+
+func usersUsingSigningKey(ctx context.Context, storage logical.Storage, operator string, account string, signingKey string) ([]string, error) {
+	users, err := listUserIssues(ctx, storage, IssueUserParameters{Operator: operator, Account: account})
+	if err != nil {
+		return nil, err
+	}
+	var using []string
+	for _, user := range users {
+		issue, err := readUserIssue(ctx, storage, IssueUserParameters{Operator: operator, Account: account, User: user})
+		if err != nil {
+			return nil, err
+		}
+		if issue != nil && issue.UseSigningKey == signingKey {
+			using = append(using, user)
+		}
+	}
+	return using, nil
 }
 
 func deleteUserIssue(ctx context.Context, storage logical.Storage, params IssueUserParameters) error {

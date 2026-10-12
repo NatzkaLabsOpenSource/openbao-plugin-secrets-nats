@@ -3,6 +3,8 @@ package natsbackend
 import (
 	"context"
 	"fmt"
+	"slices"
+	"strings"
 
 	"github.com/nats-io/jwt/v2"
 	"github.com/nats-io/nkeys"
@@ -402,6 +404,19 @@ func storeOperatorIssue(ctx context.Context, storage logical.Storage, params Iss
 	if issue == nil {
 		issue = &IssueOperatorStorage{}
 	} else {
+		for _, signingKey := range issue.Claims.SigningKeys {
+			if slices.Contains(params.Claims.SigningKeys, signingKey) {
+				continue
+			}
+			accounts, err := accountsUsingSigningKey(ctx, storage, params.Operator, signingKey)
+			if err != nil {
+				return nil, err
+			}
+			if len(accounts) > 0 {
+				return nil, fmt.Errorf("operator signing key %s is used by accounts: %s", signingKey, strings.Join(accounts, ", "))
+			}
+		}
+
 		// diff current and incomming signing keys
 		// delete removed signing keys
 		for _, signingKey := range issue.Claims.SigningKeys {
