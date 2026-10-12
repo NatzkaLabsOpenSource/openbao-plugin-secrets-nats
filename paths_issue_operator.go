@@ -17,6 +17,7 @@ import (
 	accountv1 "github.com/NatzkaLabsOpenSource/openbao-plugin-secrets-nats/pkg/claims/account/v1alpha1"
 	"github.com/NatzkaLabsOpenSource/openbao-plugin-secrets-nats/pkg/claims/common"
 	operatorv1 "github.com/NatzkaLabsOpenSource/openbao-plugin-secrets-nats/pkg/claims/operator/v1alpha1"
+	userv1 "github.com/NatzkaLabsOpenSource/openbao-plugin-secrets-nats/pkg/claims/user/v1alpha1"
 	"github.com/NatzkaLabsOpenSource/openbao-plugin-secrets-nats/pkg/stm"
 )
 
@@ -611,9 +612,17 @@ func issueOperatorJWT(ctx context.Context, storage logical.Storage, issue IssueO
 	return nil
 }
 
+// issueSystemAccount creates the system account and its push user if missing; existing ones are left untouched.
 func issueSystemAccount(ctx context.Context, storage logical.Storage, issue IssueOperatorStorage) error {
-	// create system account jwt and nkey
-	err := addAccountIssue(ctx, storage, IssueAccountParameters{
+	sys, err := readAccountIssue(ctx, storage, IssueAccountParameters{Operator: issue.Operator, Account: DefaultSysAccountName})
+	if err != nil {
+		return err
+	}
+	if sys != nil {
+		return issueSystemAccountUser(ctx, storage, issue)
+	}
+
+	err = addAccountIssue(ctx, storage, IssueAccountParameters{
 		Operator: issue.Operator,
 		Account:  DefaultSysAccountName,
 		Claims: accountv1.AccountClaims{
@@ -673,17 +682,34 @@ func issueSystemAccount(ctx context.Context, storage logical.Storage, issue Issu
 		return err
 	}
 
-	// create system account user NKey
+	return issueSystemAccountUser(ctx, storage, issue)
+}
+
+func issueSystemAccountUser(ctx context.Context, storage logical.Storage, issue IssueOperatorStorage) error {
+	user, err := readUserIssue(ctx, storage, IssueUserParameters{Operator: issue.Operator, Account: DefaultSysAccountName, User: DefaultPushUser})
+	if err != nil || user != nil {
+		return err
+	}
+
 	_, err = addUserIssue(ctx, storage, IssueUserParameters{
 		Operator: issue.Operator,
 		Account:  DefaultSysAccountName,
 		User:     DefaultPushUser,
+		Claims: userv1.UserClaims{
+			User: userv1.User{
+				UserPermissionLimits: userv1.UserPermissionLimits{
+					Permissions: common.Permissions{
+						Pub: common.Permission{Allow: []string{"$SYS.REQ.CLAIMS.LIST", "$SYS.REQ.CLAIMS.UPDATE", "$SYS.REQ.CLAIMS.DELETE"}},
+						Sub: common.Permission{Allow: []string{"_INBOX.>"}},
+					},
+					Limits: userv1.Limits{
+						NatsLimits: common.NatsLimits{Subs: -1, Data: -1, Payload: -1},
+					},
+				},
+			},
+		},
 	})
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return err
 }
 
 func updateAccountIssues(ctx context.Context, storage logical.Storage, issue IssueOperatorStorage) error {

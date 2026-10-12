@@ -11,6 +11,7 @@ import (
 	"github.com/nats-io/jwt/v2"
 	"github.com/openbao/openbao/sdk/v2/logical"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestCRUDOperatorIssue(t *testing.T) {
@@ -606,4 +607,33 @@ func TestOperatorIssueTLSFields(t *testing.T) {
 	stored, err := readOperatorIssue(context.Background(), reqStorage, IssueOperatorParameters{Operator: "op1"})
 	assert.NoError(t, err)
 	assert.Equal(t, "client-key-pem", stored.TLSClientKey)
+}
+
+func TestSystemAccountKeptOnOperatorWrite(t *testing.T) {
+	ctx := context.Background()
+	b, s := getTestBackend(t)
+	do := func(path string, data map[string]interface{}) {
+		resp, err := b.HandleRequest(ctx, &logical.Request{Operation: logical.UpdateOperation, Path: path, Storage: s, Data: data})
+		require.NoError(t, err)
+		require.False(t, resp != nil && resp.IsError(), "%v", resp)
+	}
+
+	do("issue/operator/op1", map[string]interface{}{"createSystemAccount": true})
+	do("issue/operator/op1/account/sys", map[string]interface{}{
+		"claims": map[string]interface{}{"account": map[string]interface{}{"signingKeys": []string{"ssk"}}},
+	})
+	do("issue/operator/op1/account/sys/user/mon", map[string]interface{}{"useSigningKey": "ssk"})
+	do("issue/operator/op1", map[string]interface{}{
+		"createSystemAccount": true,
+		"claims":              map[string]interface{}{"operator": map[string]interface{}{"signingKeys": []string{"opsk1"}}},
+	})
+
+	sys, err := readAccountIssue(ctx, s, IssueAccountParameters{Operator: "op1", Account: DefaultSysAccountName})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"ssk"}, sys.Claims.SigningKeys)
+
+	push, err := readUserIssue(ctx, s, IssueUserParameters{Operator: "op1", Account: DefaultSysAccountName, User: DefaultPushUser})
+	require.NoError(t, err)
+	assert.Contains(t, push.Claims.Pub.Allow, "$SYS.REQ.CLAIMS.UPDATE")
+	assert.Equal(t, []string{"_INBOX.>"}, push.Claims.Sub.Allow)
 }
