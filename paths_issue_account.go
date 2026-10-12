@@ -826,17 +826,17 @@ func refreshAccountResolver(ctx context.Context, storage logical.Storage, issue 
 			return err
 		}
 
-		// read account jwt
+		// read account nkey
 		accNkey, err := readAccountNkey(ctx, storage, NkeyParameters{
 			Operator: issue.Operator,
 			Account:  issue.Account,
 		})
 		if err != nil {
 			return err
-		} else if accJWT == nil {
+		} else if accNkey == nil {
 			log.Warn().Str("operator", issue.Operator).
 				Str("account", issue.Account).
-				Msg("cannot sync account server: account neky does not exist")
+				Msg("cannot sync account server: account nkey does not exist")
 			return nil
 		}
 		kp, err = toNkeyData(accNkey)
