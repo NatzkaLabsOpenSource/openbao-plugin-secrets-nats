@@ -535,7 +535,7 @@ func TestCRUDOperatorIssue(t *testing.T) {
 			Path:      path,
 			Storage:   reqStorage,
 			Data: map[string]interface{}{
-				"CreateSystemAccount": true,
+				"createSystemAccount": true,
 			},
 		})
 		assert.NoError(t, err)

@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/NatzkaLabsOpenSource/openbao-plugin-secrets-nats/pkg/stm"
 	"github.com/nats-io/nkeys"
 	"github.com/openbao/openbao/sdk/v2/framework"
 	"github.com/openbao/openbao/sdk/v2/logical"
@@ -75,11 +74,7 @@ func (b *NatsBackend) pathAddAccountNkey(ctx context.Context, req *logical.Reque
 		return logical.ErrorResponse(InvalidParametersError), logical.ErrInvalidRequest
 	}
 
-	var params NkeyParameters
-	err = stm.MapToStruct(data.Raw, &params)
-	if err != nil {
-		return logical.ErrorResponse(DecodeFailedError), logical.ErrInvalidRequest
-	}
+	params := nkeyParams(data)
 
 	err = addAccountNkey(ctx, req.Storage, params)
 	if err != nil {
@@ -94,11 +89,7 @@ func (b *NatsBackend) pathReadAccountNkey(ctx context.Context, req *logical.Requ
 		return logical.ErrorResponse(InvalidParametersError), logical.ErrInvalidRequest
 	}
 
-	var params NkeyParameters
-	err = stm.MapToStruct(data.Raw, &params)
-	if err != nil {
-		return logical.ErrorResponse(DecodeFailedError), logical.ErrInvalidRequest
-	}
+	params := nkeyParams(data)
 
 	nkey, err := readAccountNkey(ctx, req.Storage, params)
 	if err != nil {
@@ -118,11 +109,7 @@ func (b *NatsBackend) pathListAccountNkeys(ctx context.Context, req *logical.Req
 		return logical.ErrorResponse(InvalidParametersError), logical.ErrInvalidRequest
 	}
 
-	var params NkeyParameters
-	err = stm.MapToStruct(data.Raw, &params)
-	if err != nil {
-		return logical.ErrorResponse(DecodeFailedError), logical.ErrInvalidRequest
-	}
+	params := nkeyParams(data)
 
 	entries, err := listAccountNkeys(ctx, req.Storage, params)
 	if err != nil {
@@ -138,11 +125,7 @@ func (b *NatsBackend) pathDeleteAccountNkey(ctx context.Context, req *logical.Re
 		return logical.ErrorResponse(InvalidParametersError), logical.ErrInvalidRequest
 	}
 
-	var params NkeyParameters
-	err = stm.MapToStruct(data.Raw, &params)
-	if err != nil {
-		return logical.ErrorResponse(DecodeFailedError), logical.ErrInvalidRequest
-	}
+	params := nkeyParams(data)
 
 	// when a key is given, store it
 	err = deleteAccountNkey(ctx, req.Storage, params)

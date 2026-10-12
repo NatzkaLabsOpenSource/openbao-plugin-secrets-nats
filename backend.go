@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NatzkaLabsOpenSource/openbao-plugin-secrets-nats/pkg/stm"
 	"github.com/openbao/openbao/sdk/v2/framework"
 	"github.com/openbao/openbao/sdk/v2/logical"
 )
@@ -159,25 +158,11 @@ func storeInStorage[T any](ctx context.Context, s logical.Storage, path string, 
 	return nil
 }
 
-func readOperation[T any](ctx context.Context, s logical.Storage, path string) (*logical.Response, error) {
-	t, err := getFromStorage[T](ctx, s, path)
-	if err != nil {
-		return nil, err
-	}
-
-	if t == nil {
-		return nil, nil
-	}
-
-	var groupMap map[string]interface{}
-	err = stm.StructToMap(t, &groupMap)
-	if err != nil {
-		return nil, err
-	}
-
-	return &logical.Response{
-		Data: groupMap,
-	}, nil
+// get returns the field value or the zero value of T when the field is unset or not in the path schema.
+func get[T any](data *framework.FieldData, key string) T {
+	v, _ := data.GetOk(key)
+	t, _ := v.(T)
+	return t
 }
 
 func (b *NatsBackend) periodicFunc(ctx context.Context, sys *logical.Request) error {

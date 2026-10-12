@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/NatzkaLabsOpenSource/openbao-plugin-secrets-nats/pkg/stm"
 	"github.com/nats-io/nkeys"
 	"github.com/openbao/openbao/sdk/v2/framework"
 	"github.com/openbao/openbao/sdk/v2/logical"
@@ -85,11 +84,7 @@ func (b *NatsBackend) pathAddUserNkey(ctx context.Context, req *logical.Request,
 		return logical.ErrorResponse(InvalidParametersError), logical.ErrInvalidRequest
 	}
 
-	var params NkeyParameters
-	err = stm.MapToStruct(data.Raw, &params)
-	if err != nil {
-		return logical.ErrorResponse(DecodeFailedError), logical.ErrInvalidRequest
-	}
+	params := nkeyParams(data)
 
 	err = addUserNkey(ctx, req.Storage, params)
 	if err != nil {
@@ -104,11 +99,7 @@ func (b *NatsBackend) pathReadUserNkey(ctx context.Context, req *logical.Request
 		return logical.ErrorResponse(InvalidParametersError), logical.ErrInvalidRequest
 	}
 
-	var params NkeyParameters
-	err = stm.MapToStruct(data.Raw, &params)
-	if err != nil {
-		return logical.ErrorResponse(DecodeFailedError), logical.ErrInvalidRequest
-	}
+	params := nkeyParams(data)
 
 	nkey, err := readUserNkey(ctx, req.Storage, params)
 	if err != nil {
@@ -128,11 +119,7 @@ func (b *NatsBackend) pathListUserNkeys(ctx context.Context, req *logical.Reques
 		return logical.ErrorResponse(InvalidParametersError), logical.ErrInvalidRequest
 	}
 
-	var params NkeyParameters
-	err = stm.MapToStruct(data.Raw, &params)
-	if err != nil {
-		return logical.ErrorResponse(DecodeFailedError), logical.ErrInvalidRequest
-	}
+	params := nkeyParams(data)
 
 	entries, err := listUserNkeys(ctx, req.Storage, params)
 	if err != nil {
@@ -148,11 +135,7 @@ func (b *NatsBackend) pathDeleteUserNkey(ctx context.Context, req *logical.Reque
 		return logical.ErrorResponse(InvalidParametersError), logical.ErrInvalidRequest
 	}
 
-	var params NkeyParameters
-	err = stm.MapToStruct(data.Raw, &params)
-	if err != nil {
-		return logical.ErrorResponse(DecodeFailedError), logical.ErrInvalidRequest
-	}
+	params := nkeyParams(data)
 
 	// when a key is given, store it
 	err = deleteUserNkey(ctx, req.Storage, params)

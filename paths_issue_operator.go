@@ -2,7 +2,6 @@ package natsbackend
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
 	"github.com/nats-io/jwt/v2"
@@ -39,6 +38,20 @@ type IssueOperatorParameters struct {
 	TLSClientCert       string                    `json:"tlsClientCert,omitempty"`
 	TLSClientKey        string                    `json:"tlsClientKey,omitempty"`
 	TLSFirst            bool                      `json:"tlsFirst,omitempty"`
+}
+
+func issueOperatorParams(data *framework.FieldData) (IssueOperatorParameters, error) {
+	params := IssueOperatorParameters{
+		Operator:            get[string](data, "operator"),
+		CreateSystemAccount: get[bool](data, "createSystemAccount"),
+		SyncAccountServer:   get[bool](data, "syncAccountServer"),
+		TLSCACert:           get[string](data, "tlsCaCert"),
+		TLSClientCert:       get[string](data, "tlsClientCert"),
+		TLSClientKey:        get[string](data, "tlsClientKey"),
+		TLSFirst:            get[bool](data, "tlsFirst"),
+	}
+	err := stm.MapToStruct(get[map[string]interface{}](data, "claims"), &params.Claims)
+	return params, err
 }
 
 // IssueOperatorData is the read response. tlsClientKey is write-only and never returned.
@@ -147,12 +160,10 @@ func (b *NatsBackend) pathAddOperatorIssue(ctx context.Context, req *logical.Req
 		return logical.ErrorResponse(InvalidParametersError), logical.ErrInvalidRequest
 	}
 
-	jsonString, err := json.Marshal(data.Raw)
+	params, err := issueOperatorParams(data)
 	if err != nil {
 		return logical.ErrorResponse(DecodeFailedError), logical.ErrInvalidRequest
 	}
-	params := IssueOperatorParameters{}
-	json.Unmarshal(jsonString, &params)
 
 	err = addOperatorIssue(ctx, req.Storage, params)
 	if err != nil {
@@ -167,12 +178,10 @@ func (b *NatsBackend) pathReadOperatorIssue(ctx context.Context, req *logical.Re
 		return logical.ErrorResponse(InvalidParametersError), logical.ErrInvalidRequest
 	}
 
-	jsonString, err := json.Marshal(data.Raw)
+	params, err := issueOperatorParams(data)
 	if err != nil {
 		return logical.ErrorResponse(DecodeFailedError), logical.ErrInvalidRequest
 	}
-	params := IssueOperatorParameters{}
-	json.Unmarshal(jsonString, &params)
 
 	issue, err := readOperatorIssue(ctx, req.Storage, params)
 	if err != nil {
@@ -207,12 +216,10 @@ func (b *NatsBackend) pathDeleteOperatorIssue(ctx context.Context, req *logical.
 		return logical.ErrorResponse(InvalidParametersError), logical.ErrInvalidRequest
 	}
 
-	jsonString, err := json.Marshal(data.Raw)
+	params, err := issueOperatorParams(data)
 	if err != nil {
 		return logical.ErrorResponse(DecodeFailedError), logical.ErrInvalidRequest
 	}
-	params := IssueOperatorParameters{}
-	json.Unmarshal(jsonString, &params)
 
 	// delete issue and all related nkeys and jwt
 	err = deleteOperatorIssue(ctx, req.Storage, params)

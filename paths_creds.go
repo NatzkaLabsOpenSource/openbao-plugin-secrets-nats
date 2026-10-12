@@ -13,6 +13,14 @@ type CredsParameters struct {
 	User     string `json:"user,omitempty"`
 }
 
+func credsParams(data *framework.FieldData) CredsParameters {
+	return CredsParameters{
+		Operator: get[string](data, "operator"),
+		Account:  get[string](data, "account"),
+		User:     get[string](data, "user"),
+	}
+}
+
 // CredsData represents the the data returned by a Creds operation
 type CredsData struct {
 	Creds string `json:"creds"`

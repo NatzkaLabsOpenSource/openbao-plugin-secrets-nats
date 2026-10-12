@@ -3,7 +3,6 @@ package natsbackend
 import (
 	"context"
 
-	"github.com/NatzkaLabsOpenSource/openbao-plugin-secrets-nats/pkg/stm"
 	"github.com/openbao/openbao/sdk/v2/framework"
 	"github.com/openbao/openbao/sdk/v2/logical"
 )
@@ -88,11 +87,7 @@ func (b *NatsBackend) pathListUserCreds(ctx context.Context, req *logical.Reques
 		return logical.ErrorResponse(InvalidParametersError), logical.ErrInvalidRequest
 	}
 
-	var params CredsParameters
-	err = stm.MapToStruct(data.Raw, &params)
-	if err != nil {
-		return logical.ErrorResponse(DecodeFailedError), logical.ErrInvalidRequest
-	}
+	params := credsParams(data)
 
 	entries, err := listUserCreds(ctx, req.Storage, params)
 	if err != nil {
