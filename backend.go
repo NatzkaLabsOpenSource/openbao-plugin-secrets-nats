@@ -319,6 +319,6 @@ const deprecatedUserBeforeAccount = "creating a user before its account is depre
 
 func deprecatedWrite() *logical.Response {
 	resp := &logical.Response{}
-	resp.AddWarning("writing nkey/ and jwt/ paths is deprecated and will become read-only; keys and JWTs are managed through issue/ paths")
+	resp.AddWarning("writing and deleting nkey/ and jwt/ paths is deprecated, they will become read-only; keys and JWTs are managed through issue/ paths")
 	return resp
 }

@@ -50,7 +50,8 @@ func pathUserNkey(b *NatsBackend) []*framework.Path {
 					Callback: b.pathReadUserNkey,
 				},
 				logical.DeleteOperation: &framework.PathOperation{
-					Callback: b.pathDeleteUserNkey,
+					Callback:   b.pathDeleteUserNkey,
+					Deprecated: true,
 				},
 			},
 			HelpSynopsis:    `Manages user Nkey keypairs.`,
@@ -147,7 +148,7 @@ func (b *NatsBackend) pathDeleteUserNkey(ctx context.Context, req *logical.Reque
 	if err != nil {
 		return logical.ErrorResponse(DeleteNkeyFailedError), nil
 	}
-	return nil, nil
+	return deprecatedWrite(), nil
 }
 
 func readUserNkey(ctx context.Context, storage logical.Storage, params NkeyParameters) (*NKeyStorage, error) {

@@ -40,7 +40,8 @@ func pathOperatorNkey(b *NatsBackend) []*framework.Path {
 					Callback: b.pathReadOperatorNkey,
 				},
 				logical.DeleteOperation: &framework.PathOperation{
-					Callback: b.pathDeleteOperatorNkey,
+					Callback:   b.pathDeleteOperatorNkey,
+					Deprecated: true,
 				},
 			},
 			HelpSynopsis:    `Manages operator Nkeys.`,
@@ -123,7 +124,7 @@ func (b *NatsBackend) pathDeleteOperatorNkey(ctx context.Context, req *logical.R
 	if err != nil {
 		return logical.ErrorResponse(DeleteNkeyFailedError), nil
 	}
-	return nil, nil
+	return deprecatedWrite(), nil
 }
 
 func readOperatorNkey(ctx context.Context, storage logical.Storage, params NkeyParameters) (*NKeyStorage, error) {

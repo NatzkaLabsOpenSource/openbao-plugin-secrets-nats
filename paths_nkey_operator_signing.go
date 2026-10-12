@@ -46,7 +46,8 @@ func pathOperatorSigningNkey(b *NatsBackend) []*framework.Path {
 					Callback: b.pathReadOperatorSigningNkey,
 				},
 				logical.DeleteOperation: &framework.PathOperation{
-					Callback: b.pathDeleteOperatorSigningNkey,
+					Callback:   b.pathDeleteOperatorSigningNkey,
+					Deprecated: true,
 				},
 			},
 			HelpSynopsis:    `Manages signing Nkeys.`,
@@ -145,7 +146,7 @@ func (b *NatsBackend) pathDeleteOperatorSigningNkey(ctx context.Context, req *lo
 	if err != nil {
 		return logical.ErrorResponse(DeleteNkeyFailedError), nil
 	}
-	return nil, nil
+	return deprecatedWrite(), nil
 }
 
 func readOperatorSigningNkey(ctx context.Context, storage logical.Storage, params NkeyParameters) (*NKeyStorage, error) {

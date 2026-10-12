@@ -45,7 +45,8 @@ func pathAccountNkey(b *NatsBackend) []*framework.Path {
 					Callback: b.pathReadAccountNkey,
 				},
 				logical.DeleteOperation: &framework.PathOperation{
-					Callback: b.pathDeleteAccountNkey,
+					Callback:   b.pathDeleteAccountNkey,
+					Deprecated: true,
 				},
 			},
 			HelpSynopsis:    `Manages account Nkeys.`,
@@ -137,7 +138,7 @@ func (b *NatsBackend) pathDeleteAccountNkey(ctx context.Context, req *logical.Re
 	if err != nil {
 		return logical.ErrorResponse(DeleteNkeyFailedError), nil
 	}
-	return nil, nil
+	return deprecatedWrite(), nil
 }
 
 func readAccountNkey(ctx context.Context, storage logical.Storage, params NkeyParameters) (*NKeyStorage, error) {

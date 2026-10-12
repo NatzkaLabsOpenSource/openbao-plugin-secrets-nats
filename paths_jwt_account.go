@@ -45,7 +45,8 @@ func pathAccountJWT(b *NatsBackend) []*framework.Path {
 					Callback: b.pathReadAccountJWT,
 				},
 				logical.DeleteOperation: &framework.PathOperation{
-					Callback: b.pathDeleteAccountJWT,
+					Callback:   b.pathDeleteAccountJWT,
+					Deprecated: true,
 				},
 			},
 			HelpSynopsis:    `Manages account JWT's.`,
@@ -137,7 +138,7 @@ func (b *NatsBackend) pathDeleteAccountJWT(ctx context.Context, req *logical.Req
 	if err != nil {
 		return logical.ErrorResponse(DeleteJWTFailedError), nil
 	}
-	return nil, nil
+	return deprecatedWrite(), nil
 }
 
 func readAccountJWT(ctx context.Context, storage logical.Storage, params JWTParameters) (*JWTStorage, error) {

@@ -50,7 +50,8 @@ func pathAccountSigningNkey(b *NatsBackend) []*framework.Path {
 					Callback: b.pathReadAccountSigningNkey,
 				},
 				logical.DeleteOperation: &framework.PathOperation{
-					Callback: b.pathDeleteAccountSigningNkey,
+					Callback:   b.pathDeleteAccountSigningNkey,
+					Deprecated: true,
 				},
 			},
 			HelpSynopsis:    `Manages account signing Nkey keypairs.`,
@@ -154,7 +155,7 @@ func (b *NatsBackend) pathDeleteAccountSigningNkey(ctx context.Context, req *log
 	if err != nil {
 		return logical.ErrorResponse(DeleteNkeyFailedError), nil
 	}
-	return nil, nil
+	return deprecatedWrite(), nil
 }
 
 func readAccountSigningNkey(ctx context.Context, storage logical.Storage, params NkeyParameters) (*NKeyStorage, error) {

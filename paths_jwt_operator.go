@@ -40,7 +40,8 @@ func pathOperatorJWT(b *NatsBackend) []*framework.Path {
 					Callback: b.pathReadOperatorJWT,
 				},
 				logical.DeleteOperation: &framework.PathOperation{
-					Callback: b.pathDeleteOperatorJWT,
+					Callback:   b.pathDeleteOperatorJWT,
+					Deprecated: true,
 				},
 			},
 			HelpSynopsis:    `Manages operator JWT.`,
@@ -125,7 +126,7 @@ func (b *NatsBackend) pathDeleteOperatorJWT(ctx context.Context, req *logical.Re
 	if err != nil {
 		return logical.ErrorResponse(DeleteJWTFailedError), nil
 	}
-	return nil, nil
+	return deprecatedWrite(), nil
 }
 
 func readOperatorJWT(ctx context.Context, storage logical.Storage, params JWTParameters) (*JWTStorage, error) {
