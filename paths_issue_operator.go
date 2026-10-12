@@ -2,6 +2,7 @@ package natsbackend
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -691,23 +692,25 @@ func updateAccountIssues(ctx context.Context, storage logical.Storage, issue Iss
 		return err
 	}
 
+	var errs []error
 	for _, account := range accounts {
 		acc, err := readAccountIssue(ctx, storage, IssueAccountParameters{
 			Operator: issue.Operator,
 			Account:  account,
 		})
 		if err != nil {
-			return err
+			errs = append(errs, fmt.Errorf("account %s: %w", account, err))
+			continue
 		}
 		if acc == nil {
-			return err
+			continue
 		}
 		err = refreshAccount(ctx, storage, acc)
 		if err != nil {
-			return err
+			errs = append(errs, fmt.Errorf("account %s: %w", account, err))
 		}
 	}
-	return nil
+	return errors.Join(errs...)
 }
 
 func getOperatorIssuePath(operator string) string {
