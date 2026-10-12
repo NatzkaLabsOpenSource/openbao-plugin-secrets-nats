@@ -1,4 +1,4 @@
-FROM openbao/openbao:2.4.1
+FROM openbao/openbao:2.7.1
 
 ARG TARGETARCH
 
