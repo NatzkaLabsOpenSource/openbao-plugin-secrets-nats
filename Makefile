@@ -12,7 +12,7 @@ endif
 
 .DEFAULT_GOAL := all
 
-DOCKER_REGISTRY ?= siredmar
+DOCKER_REGISTRY ?= ghcr.io/natzkalabsopensource/openbao-plugin-secrets-nats
 VERSION ?= $(shell git describe --tags --always --dirty)
 
 generate:
@@ -33,7 +33,7 @@ start:
 	bao server -dev -dev-root-token-id=root -dev-plugin-dir=./build/openbao/plugins -log-level=trace -dev-listen-address=127.0.0.1:8200
 
 enable:
-	VAULT_ADDR='http://127.0.0.1:8200' bao secrets enable -path=nats-secrets openbao-plugin-secrets-nats-$(OS)-$(GO_ARCH)
+	BAO_ADDR='http://127.0.0.1:8200' bao secrets enable -path=nats-secrets openbao-plugin-secrets-nats-$(OS)-$(GO_ARCH)
 
 clean:
 	rm -f ./build/openbao/plugins/openbao-plugin-secrets-nats-*
@@ -47,12 +47,12 @@ test:
 	go vet ./...
 
 example:
-	VAULT_ADDR='http://127.0.0.1:8200' example/config.sh
+	BAO_ADDR='http://127.0.0.1:8200' example/config.sh
 	docker kill nats
 	docker network rm nats
 
 example-start:
-	VAULT_ADDR='http://127.0.0.1:8200' example/config.sh
+	BAO_ADDR='http://127.0.0.1:8200' example/config.sh
 
 example-stop:
 	docker kill nats
