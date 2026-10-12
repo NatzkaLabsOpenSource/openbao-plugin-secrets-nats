@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/NatzkaLabsOpenSource/openbao-plugin-secrets-nats/pkg/stm"
 	"github.com/nats-io/jwt/v2"
 	"github.com/openbao/openbao/sdk/v2/framework"
 	"github.com/openbao/openbao/sdk/v2/logical"
@@ -64,11 +63,7 @@ func (b *NatsBackend) pathAddOperatorJWT(ctx context.Context, req *logical.Reque
 		return logical.ErrorResponse(InvalidParametersError), logical.ErrInvalidRequest
 	}
 
-	var params JWTParameters
-	err = stm.MapToStruct(data.Raw, &params)
-	if err != nil {
-		return logical.ErrorResponse(DecodeFailedError), logical.ErrInvalidRequest
-	}
+	params := jwtParams(data)
 
 	err = addOperatorJWT(ctx, req.Storage, params)
 	if err != nil {
@@ -84,11 +79,7 @@ func (b *NatsBackend) pathReadOperatorJWT(ctx context.Context, req *logical.Requ
 		return logical.ErrorResponse(InvalidParametersError), logical.ErrInvalidRequest
 	}
 
-	var params JWTParameters
-	err = stm.MapToStruct(data.Raw, &params)
-	if err != nil {
-		return logical.ErrorResponse(DecodeFailedError), logical.ErrInvalidRequest
-	}
+	params := jwtParams(data)
 
 	jwt, err := readOperatorJWT(ctx, req.Storage, params)
 	if err != nil {
@@ -122,11 +113,7 @@ func (b *NatsBackend) pathDeleteOperatorJWT(ctx context.Context, req *logical.Re
 		return logical.ErrorResponse(InvalidParametersError), logical.ErrInvalidRequest
 	}
 
-	var params JWTParameters
-	err = stm.MapToStruct(data.Raw, &params)
-	if err != nil {
-		return logical.ErrorResponse(DecodeFailedError), logical.ErrInvalidRequest
-	}
+	params := jwtParams(data)
 
 	// when a key is given, store it
 	err = deleteOperatorJWT(ctx, req.Storage, params)

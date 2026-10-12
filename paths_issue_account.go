@@ -2,7 +2,6 @@ package natsbackend
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -36,6 +35,17 @@ type IssueAccountParameters struct {
 	UseSigningKey  string                 `json:"useSigningKey,omitempty"`
 	RevocationsTTL int64                  `json:"revocationsTTL,omitempty"`
 	Claims         v1alpha1.AccountClaims `json:"claims,omitempty"`
+}
+
+func issueAccountParams(data *framework.FieldData) (IssueAccountParameters, error) {
+	params := IssueAccountParameters{
+		Operator:       get[string](data, "operator"),
+		Account:        get[string](data, "account"),
+		UseSigningKey:  get[string](data, "useSigningKey"),
+		RevocationsTTL: int64(get[int](data, "revocationsTTL")),
+	}
+	err := stm.MapToStruct(get[map[string]interface{}](data, "claims"), &params.Claims)
+	return params, err
 }
 
 type IssueAccountData struct {
@@ -132,12 +142,10 @@ func (b *NatsBackend) pathAddAccountIssue(ctx context.Context, req *logical.Requ
 		return logical.ErrorResponse(InvalidParametersError), logical.ErrInvalidRequest
 	}
 
-	jsonString, err := json.Marshal(data.Raw)
+	params, err := issueAccountParams(data)
 	if err != nil {
 		return logical.ErrorResponse(DecodeFailedError), logical.ErrInvalidRequest
 	}
-	params := IssueAccountParameters{}
-	json.Unmarshal(jsonString, &params)
 	err = addAccountIssue(ctx, req.Storage, params)
 	if err != nil {
 		return logical.ErrorResponse(fmt.Sprintf("%s: %s", AddingIssueFailedError, err.Error())), nil
@@ -151,12 +159,10 @@ func (b *NatsBackend) pathReadAccountIssue(ctx context.Context, req *logical.Req
 		return logical.ErrorResponse(InvalidParametersError), logical.ErrInvalidRequest
 	}
 
-	jsonString, err := json.Marshal(data.Raw)
+	params, err := issueAccountParams(data)
 	if err != nil {
 		return logical.ErrorResponse(DecodeFailedError), logical.ErrInvalidRequest
 	}
-	params := IssueAccountParameters{}
-	json.Unmarshal(jsonString, &params)
 
 	issue, err := readAccountIssue(ctx, req.Storage, params)
 	if err != nil {
@@ -176,12 +182,10 @@ func (b *NatsBackend) pathListAccountIssue(ctx context.Context, req *logical.Req
 		return logical.ErrorResponse(InvalidParametersError), logical.ErrInvalidRequest
 	}
 
-	jsonString, err := json.Marshal(data.Raw)
+	params, err := issueAccountParams(data)
 	if err != nil {
 		return logical.ErrorResponse(DecodeFailedError), logical.ErrInvalidRequest
 	}
-	params := IssueAccountParameters{}
-	json.Unmarshal(jsonString, &params)
 
 	entries, err := listAccountIssues(ctx, req.Storage, params.Operator)
 	if err != nil {
@@ -197,12 +201,10 @@ func (b *NatsBackend) pathDeleteAccountIssue(ctx context.Context, req *logical.R
 		return logical.ErrorResponse(InvalidParametersError), logical.ErrInvalidRequest
 	}
 
-	jsonString, err := json.Marshal(data.Raw)
+	params, err := issueAccountParams(data)
 	if err != nil {
 		return logical.ErrorResponse(DecodeFailedError), logical.ErrInvalidRequest
 	}
-	params := IssueAccountParameters{}
-	json.Unmarshal(jsonString, &params)
 
 	// delete issue and all related nkeys and jwt
 	err = deleteAccountIssue(ctx, req.Storage, params)

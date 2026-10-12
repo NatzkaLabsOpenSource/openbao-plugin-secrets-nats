@@ -3,7 +3,6 @@ package natsbackend
 import (
 	"context"
 
-	"github.com/NatzkaLabsOpenSource/openbao-plugin-secrets-nats/pkg/stm"
 	"github.com/nats-io/nkeys"
 	"github.com/openbao/openbao/sdk/v2/framework"
 	"github.com/openbao/openbao/sdk/v2/logical"
@@ -84,11 +83,7 @@ func (b *NatsBackend) pathAddAccountSigningNkey(ctx context.Context, req *logica
 		return logical.ErrorResponse(InvalidParametersError), logical.ErrInvalidRequest
 	}
 
-	var params NkeyParameters
-	err = stm.MapToStruct(data.Raw, &params)
-	if err != nil {
-		return logical.ErrorResponse(DecodeFailedError), logical.ErrInvalidRequest
-	}
+	params := nkeyParams(data)
 
 	err = addAccountSigningNkey(ctx, req.Storage, params)
 	if err != nil {
@@ -103,11 +98,7 @@ func (b *NatsBackend) pathReadAccountSigningNkey(ctx context.Context, req *logic
 		return logical.ErrorResponse(InvalidParametersError), logical.ErrInvalidRequest
 	}
 
-	var params NkeyParameters
-	err = stm.MapToStruct(data.Raw, &params)
-	if err != nil {
-		return logical.ErrorResponse(DecodeFailedError), logical.ErrInvalidRequest
-	}
+	params := nkeyParams(data)
 
 	nkey, err := readAccountSigningNkey(ctx, req.Storage, params)
 	if err != nil {
@@ -127,11 +118,7 @@ func (b *NatsBackend) pathListAccountSigningNkeys(ctx context.Context, req *logi
 		return logical.ErrorResponse(InvalidParametersError), logical.ErrInvalidRequest
 	}
 
-	var params NkeyParameters
-	err = stm.MapToStruct(data.Raw, &params)
-	if err != nil {
-		return logical.ErrorResponse(DecodeFailedError), logical.ErrInvalidRequest
-	}
+	params := nkeyParams(data)
 
 	entries, err := listAccountSigningNkeys(ctx, req.Storage, params)
 	if err != nil {
@@ -147,11 +134,7 @@ func (b *NatsBackend) pathDeleteAccountSigningNkey(ctx context.Context, req *log
 		return logical.ErrorResponse(InvalidParametersError), logical.ErrInvalidRequest
 	}
 
-	var params NkeyParameters
-	err = stm.MapToStruct(data.Raw, &params)
-	if err != nil {
-		return logical.ErrorResponse(DecodeFailedError), logical.ErrInvalidRequest
-	}
+	params := nkeyParams(data)
 
 	// when a key is given, store it
 	err = deleteAccountSigningNkey(ctx, req.Storage, params)

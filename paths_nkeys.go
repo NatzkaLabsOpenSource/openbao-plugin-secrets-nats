@@ -27,6 +27,16 @@ type NkeyParameters struct {
 	Seed     string `json:"seed,omitempty"`
 }
 
+func nkeyParams(data *framework.FieldData) NkeyParameters {
+	return NkeyParameters{
+		Operator: get[string](data, "operator"),
+		Account:  get[string](data, "account"),
+		Signing:  get[string](data, "signing"),
+		User:     get[string](data, "user"),
+		Seed:     get[string](data, "seed"),
+	}
+}
+
 // NkeyData represents the the data returned by a Nkey operation
 type NkeyData struct {
 	PublicKey  string `json:"publicKey,omitempty"`

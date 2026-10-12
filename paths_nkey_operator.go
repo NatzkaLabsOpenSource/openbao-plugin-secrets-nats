@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/NatzkaLabsOpenSource/openbao-plugin-secrets-nats/pkg/stm"
 	"github.com/nats-io/nkeys"
 	"github.com/openbao/openbao/sdk/v2/framework"
 	"github.com/openbao/openbao/sdk/v2/logical"
@@ -63,11 +62,7 @@ func (b *NatsBackend) pathAddOperatorNkey(ctx context.Context, req *logical.Requ
 		return logical.ErrorResponse(InvalidParametersError), logical.ErrInvalidRequest
 	}
 
-	var params NkeyParameters
-	err = stm.MapToStruct(data.Raw, &params)
-	if err != nil {
-		return logical.ErrorResponse(DecodeFailedError), logical.ErrInvalidRequest
-	}
+	params := nkeyParams(data)
 
 	err = addOperatorNkey(ctx, req.Storage, params)
 	if err != nil {
@@ -82,11 +77,7 @@ func (b *NatsBackend) pathReadOperatorNkey(ctx context.Context, req *logical.Req
 		return logical.ErrorResponse(InvalidParametersError), logical.ErrInvalidRequest
 	}
 
-	var params NkeyParameters
-	err = stm.MapToStruct(data.Raw, &params)
-	if err != nil {
-		return logical.ErrorResponse(DecodeFailedError), logical.ErrInvalidRequest
-	}
+	params := nkeyParams(data)
 
 	nkey, err := readOperatorNkey(ctx, req.Storage, params)
 	if err != nil {
@@ -120,11 +111,7 @@ func (b *NatsBackend) pathDeleteOperatorNkey(ctx context.Context, req *logical.R
 		return logical.ErrorResponse(InvalidParametersError), logical.ErrInvalidRequest
 	}
 
-	var params NkeyParameters
-	err = stm.MapToStruct(data.Raw, &params)
-	if err != nil {
-		return logical.ErrorResponse(DecodeFailedError), logical.ErrInvalidRequest
-	}
+	params := nkeyParams(data)
 
 	// when a key is given, store it
 	err = deleteOperatorNkey(ctx, req.Storage, params)

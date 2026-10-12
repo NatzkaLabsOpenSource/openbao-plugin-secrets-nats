@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/NatzkaLabsOpenSource/openbao-plugin-secrets-nats/pkg/stm"
 	"github.com/nats-io/nkeys"
 	"github.com/openbao/openbao/sdk/v2/framework"
 	"github.com/openbao/openbao/sdk/v2/logical"
@@ -75,11 +74,7 @@ func (b *NatsBackend) pathAddOperatorSigningNkey(ctx context.Context, req *logic
 		return logical.ErrorResponse(InvalidParametersError), logical.ErrInvalidRequest
 	}
 
-	var params NkeyParameters
-	err = stm.MapToStruct(data.Raw, &params)
-	if err != nil {
-		return logical.ErrorResponse(DecodeFailedError), logical.ErrInvalidRequest
-	}
+	params := nkeyParams(data)
 
 	err = addOperatorSigningNkey(ctx, req.Storage, params)
 	if err != nil {
@@ -94,11 +89,7 @@ func (b *NatsBackend) pathReadOperatorSigningNkey(ctx context.Context, req *logi
 		return logical.ErrorResponse(InvalidParametersError), logical.ErrInvalidRequest
 	}
 
-	var params NkeyParameters
-	err = stm.MapToStruct(data.Raw, &params)
-	if err != nil {
-		return logical.ErrorResponse(DecodeFailedError), logical.ErrInvalidRequest
-	}
+	params := nkeyParams(data)
 
 	nkey, err := readOperatorSigningNkey(ctx, req.Storage, params)
 	if err != nil {
@@ -118,11 +109,7 @@ func (b *NatsBackend) pathListOperatorSigningNkeys(ctx context.Context, req *log
 		return logical.ErrorResponse(InvalidParametersError), logical.ErrInvalidRequest
 	}
 
-	var params NkeyParameters
-	err = stm.MapToStruct(data.Raw, &params)
-	if err != nil {
-		return logical.ErrorResponse(DecodeFailedError), logical.ErrInvalidRequest
-	}
+	params := nkeyParams(data)
 
 	entries, err := listOperatorSigningNkeys(ctx, req.Storage, params)
 	if err != nil {
@@ -138,11 +125,7 @@ func (b *NatsBackend) pathDeleteOperatorSigningNkey(ctx context.Context, req *lo
 		return logical.ErrorResponse(InvalidParametersError), logical.ErrInvalidRequest
 	}
 
-	var params NkeyParameters
-	err = stm.MapToStruct(data.Raw, &params)
-	if err != nil {
-		return logical.ErrorResponse(DecodeFailedError), logical.ErrInvalidRequest
-	}
+	params := nkeyParams(data)
 
 	// when a key is given, store it
 	err = deleteOperatorSigningNkey(ctx, req.Storage, params)

@@ -2,7 +2,6 @@ package natsbackend
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"time"
 
@@ -36,6 +35,18 @@ type IssueUserParameters struct {
 	UseSigningKey string              `json:"useSigningKey,omitempty"`
 	Claims        v1alpha1.UserClaims `json:"claims,omitempty"`
 	CredsTTL      int64               `json:"credsTTL,omitempty"`
+}
+
+func issueUserParams(data *framework.FieldData) (IssueUserParameters, error) {
+	params := IssueUserParameters{
+		Operator:      get[string](data, "operator"),
+		Account:       get[string](data, "account"),
+		User:          get[string](data, "user"),
+		UseSigningKey: get[string](data, "useSigningKey"),
+		CredsTTL:      int64(get[int](data, "credsTTL")),
+	}
+	err := stm.MapToStruct(get[map[string]interface{}](data, "claims"), &params.Claims)
+	return params, err
 }
 
 type IssueUserData struct {
@@ -141,13 +152,10 @@ func (b *NatsBackend) pathAddUserIssue(ctx context.Context, req *logical.Request
 		return logical.ErrorResponse(InvalidParametersError), logical.ErrInvalidRequest
 	}
 
-	jsonString, err := json.Marshal(data.Raw)
+	params, err := issueUserParams(data)
 	if err != nil {
 		return logical.ErrorResponse(DecodeFailedError), logical.ErrInvalidRequest
 	}
-
-	params := IssueUserParameters{}
-	json.Unmarshal(jsonString, &params)
 
 	err = addUserIssue(ctx, req.Storage, params)
 	if err != nil {
@@ -162,12 +170,10 @@ func (b *NatsBackend) pathReadUserIssue(ctx context.Context, req *logical.Reques
 		return logical.ErrorResponse(InvalidParametersError), logical.ErrInvalidRequest
 	}
 
-	jsonString, err := json.Marshal(data.Raw)
+	params, err := issueUserParams(data)
 	if err != nil {
 		return logical.ErrorResponse(DecodeFailedError), logical.ErrInvalidRequest
 	}
-	params := IssueUserParameters{}
-	json.Unmarshal(jsonString, &params)
 
 	issue, err := readUserIssue(ctx, req.Storage, params)
 	if err != nil {
@@ -187,12 +193,10 @@ func (b *NatsBackend) pathListUserIssues(ctx context.Context, req *logical.Reque
 		return logical.ErrorResponse(InvalidParametersError), logical.ErrInvalidRequest
 	}
 
-	jsonString, err := json.Marshal(data.Raw)
+	params, err := issueUserParams(data)
 	if err != nil {
 		return logical.ErrorResponse(DecodeFailedError), logical.ErrInvalidRequest
 	}
-	params := IssueUserParameters{}
-	json.Unmarshal(jsonString, &params)
 
 	entries, err := listUserIssues(ctx, req.Storage, params)
 	if err != nil {
@@ -208,8 +212,7 @@ func (b *NatsBackend) pathDeleteUserIssue(ctx context.Context, req *logical.Requ
 		return logical.ErrorResponse(InvalidParametersError), logical.ErrInvalidRequest
 	}
 
-	var params IssueUserParameters
-	err = stm.MapToStruct(data.Raw, &params)
+	params, err := issueUserParams(data)
 	if err != nil {
 		return logical.ErrorResponse(DecodeFailedError), logical.ErrInvalidRequest
 	}

@@ -25,6 +25,14 @@ type JWTParameters struct {
 	JWTStorage
 }
 
+func jwtParams(data *framework.FieldData) JWTParameters {
+	return JWTParameters{
+		Operator:   get[string](data, "operator"),
+		Account:    get[string](data, "account"),
+		JWTStorage: JWTStorage{JWT: get[string](data, "jwt")},
+	}
+}
+
 // JWTData represents the the data returned by a JWT operation
 type JWTData struct {
 	JWTStorage

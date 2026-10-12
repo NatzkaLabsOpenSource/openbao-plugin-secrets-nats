@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/NatzkaLabsOpenSource/openbao-plugin-secrets-nats/pkg/stm"
 	"github.com/nats-io/jwt/v2"
 	"github.com/openbao/openbao/sdk/v2/framework"
 	"github.com/openbao/openbao/sdk/v2/logical"
@@ -75,11 +74,7 @@ func (b *NatsBackend) pathAddAccountJWT(ctx context.Context, req *logical.Reques
 		return logical.ErrorResponse(InvalidParametersError), logical.ErrInvalidRequest
 	}
 
-	var params JWTParameters
-	err = stm.MapToStruct(data.Raw, &params)
-	if err != nil {
-		return logical.ErrorResponse(DecodeFailedError), logical.ErrInvalidRequest
-	}
+	params := jwtParams(data)
 
 	err = addAccountJWT(ctx, req.Storage, params)
 	if err != nil {
@@ -94,11 +89,7 @@ func (b *NatsBackend) pathReadAccountJWT(ctx context.Context, req *logical.Reque
 		return logical.ErrorResponse(InvalidParametersError), logical.ErrInvalidRequest
 	}
 
-	var params JWTParameters
-	err = stm.MapToStruct(data.Raw, &params)
-	if err != nil {
-		return logical.ErrorResponse(DecodeFailedError), logical.ErrInvalidRequest
-	}
+	params := jwtParams(data)
 
 	jwt, err := readAccountJWT(ctx, req.Storage, params)
 	if err != nil {
@@ -118,11 +109,7 @@ func (b *NatsBackend) pathListAccountJWT(ctx context.Context, req *logical.Reque
 		return logical.ErrorResponse(InvalidParametersError), logical.ErrInvalidRequest
 	}
 
-	var params JWTParameters
-	err = stm.MapToStruct(data.Raw, &params)
-	if err != nil {
-		return logical.ErrorResponse(DecodeFailedError), logical.ErrInvalidRequest
-	}
+	params := jwtParams(data)
 
 	entries, err := listAccountJWTs(ctx, req.Storage, params)
 	if err != nil {
@@ -138,11 +125,7 @@ func (b *NatsBackend) pathDeleteAccountJWT(ctx context.Context, req *logical.Req
 		return logical.ErrorResponse(InvalidParametersError), logical.ErrInvalidRequest
 	}
 
-	var params JWTParameters
-	err = stm.MapToStruct(data.Raw, &params)
-	if err != nil {
-		return logical.ErrorResponse(DecodeFailedError), logical.ErrInvalidRequest
-	}
+	params := jwtParams(data)
 
 	// when a key is given, store it
 	err = deleteAccountJWT(ctx, req.Storage, params)
