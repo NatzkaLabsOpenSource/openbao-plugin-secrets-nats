@@ -8,6 +8,7 @@ import (
 	"github.com/nats-io/jwt/v2"
 	"github.com/nats-io/nkeys"
 	"github.com/openbao/openbao/sdk/v2/framework"
+	"github.com/openbao/openbao/sdk/v2/helper/locksutil"
 	"github.com/openbao/openbao/sdk/v2/logical"
 	"github.com/rs/zerolog/log"
 
@@ -156,6 +157,7 @@ func (b *NatsBackend) pathAddUserIssue(ctx context.Context, req *logical.Request
 	if err != nil {
 		return logical.ErrorResponse(DecodeFailedError), logical.ErrInvalidRequest
 	}
+	defer locksutil.LockWithUnlock(b.locks, params.Operator)()
 
 	err = addUserIssue(ctx, req.Storage, params)
 	if err != nil {
@@ -216,6 +218,7 @@ func (b *NatsBackend) pathDeleteUserIssue(ctx context.Context, req *logical.Requ
 	if err != nil {
 		return logical.ErrorResponse(DecodeFailedError), logical.ErrInvalidRequest
 	}
+	defer locksutil.LockWithUnlock(b.locks, params.Operator)()
 
 	// delete issue and all related nkeys
 	err = deleteUserIssue(ctx, req.Storage, params)

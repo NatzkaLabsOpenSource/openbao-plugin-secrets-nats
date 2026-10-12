@@ -6,6 +6,7 @@ import (
 
 	"github.com/nats-io/jwt/v2"
 	"github.com/openbao/openbao/sdk/v2/framework"
+	"github.com/openbao/openbao/sdk/v2/helper/locksutil"
 	"github.com/openbao/openbao/sdk/v2/logical"
 	"github.com/rs/zerolog/log"
 )
@@ -75,6 +76,7 @@ func (b *NatsBackend) pathAddAccountJWT(ctx context.Context, req *logical.Reques
 	}
 
 	params := jwtParams(data)
+	defer locksutil.LockWithUnlock(b.locks, params.Operator)()
 
 	err = addAccountJWT(ctx, req.Storage, params)
 	if err != nil {
@@ -126,6 +128,7 @@ func (b *NatsBackend) pathDeleteAccountJWT(ctx context.Context, req *logical.Req
 	}
 
 	params := jwtParams(data)
+	defer locksutil.LockWithUnlock(b.locks, params.Operator)()
 
 	// when a key is given, store it
 	err = deleteAccountJWT(ctx, req.Storage, params)

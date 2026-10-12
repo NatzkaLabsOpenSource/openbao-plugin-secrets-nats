@@ -2,7 +2,9 @@ package natsbackend
 
 import (
 	"context"
+	"fmt"
 	"os"
+	"sync"
 	"testing"
 
 	"github.com/hashicorp/go-hclog"
@@ -66,4 +68,34 @@ func TestCaseFoldedKeysCannotOverridePath(t *testing.T) {
 	})
 	resp = do(logical.ReadOperation, "issue/operator/op1/account/acc1/user/bob", nil)
 	assert.Empty(t, resp.Data["claims"].(map[string]interface{})["user"].(map[string]interface{})["pub"])
+}
+
+func TestConcurrentUserDeletesKeepAllRevocations(t *testing.T) {
+	b, reqStorage := getTestBackend(t)
+	ctx := context.Background()
+	do := func(op logical.Operation, path string) *logical.Response {
+		resp, err := b.HandleRequest(ctx, &logical.Request{Operation: op, Path: path, Storage: reqStorage})
+		assert.NoError(t, err)
+		assert.False(t, resp.IsError())
+		return resp
+	}
+
+	do(logical.CreateOperation, "issue/operator/op1")
+	do(logical.CreateOperation, "issue/operator/op1/account/acc1")
+	const users = 20
+	for i := range users {
+		do(logical.CreateOperation, fmt.Sprintf("issue/operator/op1/account/acc1/user/u%d", i))
+	}
+
+	var wg sync.WaitGroup
+	for i := range users {
+		wg.Go(func() {
+			do(logical.DeleteOperation, fmt.Sprintf("issue/operator/op1/account/acc1/user/u%d", i))
+		})
+	}
+	wg.Wait()
+
+	issue, err := readAccountIssue(ctx, reqStorage, IssueAccountParameters{Operator: "op1", Account: "acc1"})
+	assert.NoError(t, err)
+	assert.Len(t, issue.Status.Revocations, users)
 }
