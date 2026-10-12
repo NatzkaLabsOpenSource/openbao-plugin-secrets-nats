@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/openbao/openbao/sdk/v2/framework"
+	"github.com/openbao/openbao/sdk/v2/helper/locksutil"
 	"github.com/openbao/openbao/sdk/v2/logical"
 )
 
@@ -18,6 +19,7 @@ type NatsBackend struct {
 	*framework.Backend
 	lock   sync.RWMutex
 	client *NatsClient
+	locks  []*sync.Mutex
 }
 
 func Factory(ctx context.Context, conf *logical.BackendConfig) (logical.Backend, error) {
@@ -32,7 +34,9 @@ func Factory(ctx context.Context, conf *logical.BackendConfig) (logical.Backend,
 // for Vault. It must include each path
 // and the secrets it will store.
 func backend() *NatsBackend {
-	var b = NatsBackend{}
+	var b = NatsBackend{
+		locks: locksutil.CreateGenericLocks[sync.Mutex](),
+	}
 
 	b.Backend = &framework.Backend{
 		Help: strings.TrimSpace(backendHelp),
@@ -185,37 +189,44 @@ func (b *NatsBackend) periodicFunc(ctx context.Context, sys *logical.Request) er
 				return err
 			}
 			for _, account := range accountNames {
-				if err = b.periodicRefreshAccountIssues(ctx, sys.Storage, operator); err != nil {
-					b.Logger().Info(err.Error())
-				}
-				if err = b.periodicRefreshUserIssues(ctx, sys.Storage, operator, account); err != nil {
-					b.Logger().Info(err.Error())
-				}
-
-				if operatorIssue.SyncAccountServer {
-					b.Logger().Debug(fmt.Sprintf("Periodic: account %s in operator %s syncing to acount server", account, operator))
-					accountIssue, err := readAccountIssue(ctx, sys.Storage, IssueAccountParameters{
-						Operator: operator,
-						Account:  account,
-					})
-					if err != nil {
-						b.Logger().Info(err.Error())
-					}
-					if err = refreshAccountResolver(ctx, sys.Storage, accountIssue, AccountResolverActionPush); err != nil {
-						return err
-					}
-					_, err = storeAccountIssueUpdate(ctx, sys.Storage, accountIssue)
-					if err != nil {
-						return err
-					}
-				} else {
-					b.Logger().Info(fmt.Sprintf("Periodic: operator %s not configured for auto syncing to account server. Skipping.", operator))
-					continue
+				if err = b.periodicSyncAccount(ctx, sys.Storage, operatorIssue, account); err != nil {
+					return err
 				}
 			}
 		}
 	}
 	return nil
+}
+
+func (b *NatsBackend) periodicSyncAccount(ctx context.Context, storage logical.Storage, operatorIssue *IssueOperatorStorage, account string) error {
+	operator := operatorIssue.Operator
+	defer locksutil.LockWithUnlock(b.locks, operator)()
+
+	if err := b.periodicRefreshAccountIssues(ctx, storage, operator); err != nil {
+		b.Logger().Info(err.Error())
+	}
+	if err := b.periodicRefreshUserIssues(ctx, storage, operator, account); err != nil {
+		b.Logger().Info(err.Error())
+	}
+
+	if !operatorIssue.SyncAccountServer {
+		b.Logger().Info(fmt.Sprintf("Periodic: operator %s not configured for auto syncing to account server. Skipping.", operator))
+		return nil
+	}
+
+	accountIssue, err := readAccountIssue(ctx, storage, IssueAccountParameters{
+		Operator: operator,
+		Account:  account,
+	})
+	if err != nil || accountIssue == nil {
+		return err
+	}
+	b.Logger().Debug(fmt.Sprintf("Periodic: account %s in operator %s syncing to acount server", account, operator))
+	if err = refreshAccountResolver(ctx, storage, accountIssue, AccountResolverActionPush); err != nil {
+		return err
+	}
+	_, err = storeAccountIssueUpdate(ctx, storage, accountIssue)
+	return err
 }
 
 func (b *NatsBackend) periodicRefreshUserIssues(ctx context.Context, storage logical.Storage, operator string, account string) error {

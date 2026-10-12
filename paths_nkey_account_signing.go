@@ -5,6 +5,7 @@ import (
 
 	"github.com/nats-io/nkeys"
 	"github.com/openbao/openbao/sdk/v2/framework"
+	"github.com/openbao/openbao/sdk/v2/helper/locksutil"
 	"github.com/openbao/openbao/sdk/v2/logical"
 	"github.com/rs/zerolog/log"
 )
@@ -84,6 +85,7 @@ func (b *NatsBackend) pathAddAccountSigningNkey(ctx context.Context, req *logica
 	}
 
 	params := nkeyParams(data)
+	defer locksutil.LockWithUnlock(b.locks, params.Operator)()
 
 	err = addAccountSigningNkey(ctx, req.Storage, params)
 	if err != nil {
@@ -135,6 +137,7 @@ func (b *NatsBackend) pathDeleteAccountSigningNkey(ctx context.Context, req *log
 	}
 
 	params := nkeyParams(data)
+	defer locksutil.LockWithUnlock(b.locks, params.Operator)()
 
 	// when a key is given, store it
 	err = deleteAccountSigningNkey(ctx, req.Storage, params)
