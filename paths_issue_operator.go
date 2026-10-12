@@ -673,7 +673,7 @@ func issueSystemAccount(ctx context.Context, storage logical.Storage, issue Issu
 	}
 
 	// create system account user NKey
-	err = addUserIssue(ctx, storage, IssueUserParameters{
+	_, err = addUserIssue(ctx, storage, IssueUserParameters{
 		Operator: issue.Operator,
 		Account:  DefaultSysAccountName,
 		User:     DefaultPushUser,

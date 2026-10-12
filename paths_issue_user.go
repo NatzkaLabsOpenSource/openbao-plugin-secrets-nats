@@ -160,9 +160,12 @@ func (b *NatsBackend) pathAddUserIssue(ctx context.Context, req *logical.Request
 	}
 	defer locksutil.LockWithUnlock(b.locks, params.Operator)()
 
-	err = addUserIssue(ctx, req.Storage, params)
+	warnings, err := addUserIssue(ctx, req.Storage, params)
 	if err != nil {
 		return logical.ErrorResponse(AddingIssueFailedError), nil
+	}
+	if len(warnings) > 0 {
+		return &logical.Response{Warnings: warnings}, nil
 	}
 	return nil, nil
 }
@@ -229,28 +232,31 @@ func (b *NatsBackend) pathDeleteUserIssue(ctx context.Context, req *logical.Requ
 	return nil, nil
 }
 
-func addUserIssue(ctx context.Context, storage logical.Storage, params IssueUserParameters) error {
+func addUserIssue(ctx context.Context, storage logical.Storage, params IssueUserParameters) ([]string, error) {
 	log.Info().
 		Str("operator", params.Operator).Str("account", params.Account).Str("user", params.User).
 		Msgf("issue user")
 
+	var warnings []string
 	if params.UseSigningKey != "" {
 		account, err := readAccountIssue(ctx, storage, IssueAccountParameters{Operator: params.Operator, Account: params.Account})
 		if err != nil {
-			return err
+			return nil, err
 		}
-		if account != nil && !slices.Contains(account.Claims.SigningKeys, params.UseSigningKey) {
-			return fmt.Errorf("account signing key %s does not exist", params.UseSigningKey)
+		if account == nil {
+			warnings = append(warnings, deprecatedUserBeforeAccount)
+		} else if !slices.Contains(account.Claims.SigningKeys, params.UseSigningKey) {
+			return nil, fmt.Errorf("account signing key %s does not exist", params.UseSigningKey)
 		}
 	}
 
 	// store issue
 	issue, err := storeUserIssue(ctx, storage, params)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	return refreshUser(ctx, storage, issue)
+	return warnings, refreshUser(ctx, storage, issue)
 }
 
 func refreshUser(ctx context.Context, storage logical.Storage, issue *IssueUserStorage) error {

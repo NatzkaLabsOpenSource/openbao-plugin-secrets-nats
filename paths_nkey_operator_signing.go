@@ -3,6 +3,7 @@ package natsbackend
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/nats-io/nkeys"
 	"github.com/openbao/openbao/sdk/v2/framework"
@@ -132,7 +133,14 @@ func (b *NatsBackend) pathDeleteOperatorSigningNkey(ctx context.Context, req *lo
 	params := nkeyParams(data)
 	defer locksutil.LockWithUnlock(b.locks, params.Operator)()
 
-	// when a key is given, store it
+	accounts, err := accountsUsingSigningKey(ctx, req.Storage, params.Operator, params.Signing)
+	if err != nil {
+		return logical.ErrorResponse(DeleteNkeyFailedError), nil
+	}
+	if len(accounts) > 0 {
+		return logical.ErrorResponse("operator signing key %s is used by accounts: %s", params.Signing, strings.Join(accounts, ", ")), nil
+	}
+
 	err = deleteOperatorSigningNkey(ctx, req.Storage, params)
 	if err != nil {
 		return logical.ErrorResponse(DeleteNkeyFailedError), nil

@@ -42,6 +42,23 @@ func TestSigningKeyReferences(t *testing.T) {
 		assert.False(t, do(logical.ReadOperation, "nkey/operator/op1/account/acc1/signing/ask1", nil).IsError())
 	})
 
+	t.Run("deleting a signing nkey in use fails", func(t *testing.T) {
+		do := setup(t)
+		assert.True(t, do(logical.DeleteOperation, "nkey/operator/op1/signing/opsk1", nil).IsError())
+		assert.True(t, do(logical.DeleteOperation, "nkey/operator/op1/account/acc1/signing/ask1", nil).IsError())
+		assert.False(t, do(logical.ReadOperation, "nkey/operator/op1/signing/opsk1", nil).IsError())
+		assert.False(t, do(logical.ReadOperation, "nkey/operator/op1/account/acc1/signing/ask1", nil).IsError())
+	})
+
+	t.Run("creating a user before its account warns", func(t *testing.T) {
+		do := setup(t)
+		assert.Nil(t, do(logical.UpdateOperation, "issue/operator/op1/account/acc1/user/u2", map[string]interface{}{"useSigningKey": "ask1"}))
+		resp := do(logical.UpdateOperation, "issue/operator/op1/account/acc2/user/u1", map[string]interface{}{"useSigningKey": "ask1"})
+		require.NotNil(t, resp)
+		assert.False(t, resp.IsError())
+		assert.Len(t, resp.Warnings, 1)
+	})
+
 	t.Run("unknown signing keys are rejected", func(t *testing.T) {
 		do := setup(t)
 		assert.True(t, do(logical.UpdateOperation, "issue/operator/op1/account/acc3", map[string]interface{}{"useSigningKey": "nope"}).IsError())
