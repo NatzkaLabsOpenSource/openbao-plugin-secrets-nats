@@ -2,6 +2,7 @@ package natsbackend
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -175,43 +176,51 @@ func (b *NatsBackend) periodicFunc(ctx context.Context, sys *logical.Request) er
 	if err != nil {
 		return err
 	}
+	var errs []error
 	for _, operator := range operators {
-		operatorIssue, err := readOperatorIssue(ctx, sys.Storage, IssueOperatorParameters{
-			Operator: operator,
-		})
-		if err != nil {
-			return err
-		}
-		if operatorIssue != nil {
-			b.Logger().Debug(fmt.Sprintf("Periodic: operator %s selected for auto sync to account server", operator))
-			accountNames, err := listAccountIssues(ctx, sys.Storage, operator)
-			if err != nil {
-				return err
-			}
-			for _, account := range accountNames {
-				if err = b.periodicSyncAccount(ctx, sys.Storage, operatorIssue, account); err != nil {
-					return err
-				}
-			}
+		if err := b.periodicSyncOperator(ctx, sys.Storage, operator); err != nil {
+			errs = append(errs, fmt.Errorf("operator %s: %w", operator, err))
 		}
 	}
-	return nil
+	return errors.Join(errs...)
+}
+
+func (b *NatsBackend) periodicSyncOperator(ctx context.Context, storage logical.Storage, operator string) error {
+	operatorIssue, err := readOperatorIssue(ctx, storage, IssueOperatorParameters{
+		Operator: operator,
+	})
+	if err != nil || operatorIssue == nil {
+		return err
+	}
+	b.Logger().Debug(fmt.Sprintf("Periodic: operator %s selected for auto sync to account server", operator))
+	accountNames, err := listAccountIssues(ctx, storage, operator)
+	if err != nil {
+		return err
+	}
+	var errs []error
+	for _, account := range accountNames {
+		if err := b.periodicSyncAccount(ctx, storage, operatorIssue, account); err != nil {
+			errs = append(errs, fmt.Errorf("account %s: %w", account, err))
+		}
+	}
+	return errors.Join(errs...)
 }
 
 func (b *NatsBackend) periodicSyncAccount(ctx context.Context, storage logical.Storage, operatorIssue *IssueOperatorStorage, account string) error {
 	operator := operatorIssue.Operator
 	defer locksutil.LockWithUnlock(b.locks, operator)()
 
-	if err := b.periodicRefreshAccountIssues(ctx, storage, operator); err != nil {
-		b.Logger().Info(err.Error())
+	var errs []error
+	if err := b.periodicRefreshAccountIssue(ctx, storage, operator, account); err != nil {
+		errs = append(errs, err)
 	}
 	if err := b.periodicRefreshUserIssues(ctx, storage, operator, account); err != nil {
-		b.Logger().Info(err.Error())
+		errs = append(errs, err)
 	}
 
 	if !operatorIssue.SyncAccountServer {
 		b.Logger().Info(fmt.Sprintf("Periodic: operator %s not configured for auto syncing to account server. Skipping.", operator))
-		return nil
+		return errors.Join(errs...)
 	}
 
 	accountIssue, err := readAccountIssue(ctx, storage, IssueAccountParameters{
@@ -219,14 +228,14 @@ func (b *NatsBackend) periodicSyncAccount(ctx context.Context, storage logical.S
 		Account:  account,
 	})
 	if err != nil || accountIssue == nil {
-		return err
+		return errors.Join(append(errs, err)...)
 	}
 	b.Logger().Debug(fmt.Sprintf("Periodic: account %s in operator %s syncing to acount server", account, operator))
 	if err = refreshAccountResolver(ctx, storage, accountIssue, AccountResolverActionPush); err != nil {
-		return err
+		return errors.Join(append(errs, err)...)
 	}
 	_, err = storeAccountIssueUpdate(ctx, storage, accountIssue)
-	return err
+	return errors.Join(append(errs, err)...)
 }
 
 func (b *NatsBackend) periodicRefreshUserIssues(ctx context.Context, storage logical.Storage, operator string, account string) error {
@@ -237,80 +246,68 @@ func (b *NatsBackend) periodicRefreshUserIssues(ctx context.Context, storage log
 	if err != nil {
 		return err
 	}
+	var errs []error
 	for _, issueName := range issuesList {
-		issue, err := readUserIssue(ctx, storage, IssueUserParameters{
-			Operator: operator,
-			Account:  account,
-			User:     issueName,
-		})
-		if err != nil {
-			return err
+		if err := periodicRefreshUserIssue(ctx, storage, operator, account, issueName); err != nil {
+			errs = append(errs, fmt.Errorf("user %s: %w", issueName, err))
 		}
+	}
+	return errors.Join(errs...)
+}
 
-		nkeyMissing := false
-		nkey, err := readUserNkey(ctx, storage, NkeyParameters{
-			Operator: operator,
-			Account:  account,
-			User:     issueName,
-		})
-		if err != nil {
-			return err
-		}
-		if !issue.Status.User.Nkey || nkey == nil {
-			nkeyMissing = true
-		}
+func periodicRefreshUserIssue(ctx context.Context, storage logical.Storage, operator string, account string, user string) error {
+	issue, err := readUserIssue(ctx, storage, IssueUserParameters{
+		Operator: operator,
+		Account:  account,
+		User:     user,
+	})
+	if err != nil || issue == nil {
+		return err
+	}
 
-		if nkeyMissing {
-			if err := refreshUser(ctx, storage, issue); err != nil {
-				return err
-			}
-		}
+	nkey, err := readUserNkey(ctx, storage, NkeyParameters{
+		Operator: operator,
+		Account:  account,
+		User:     user,
+	})
+	if err != nil {
+		return err
+	}
+	if !issue.Status.User.Nkey || nkey == nil {
+		return refreshUser(ctx, storage, issue)
 	}
 	return nil
 }
 
-func (b *NatsBackend) periodicRefreshAccountIssues(ctx context.Context, storage logical.Storage, operator string) error {
-	issuesList, err := listAccountIssues(ctx, storage, operator)
+func (b *NatsBackend) periodicRefreshAccountIssue(ctx context.Context, storage logical.Storage, operator string, account string) error {
+	issue, err := readAccountIssue(ctx, storage, IssueAccountParameters{
+		Operator: operator,
+		Account:  account,
+	})
+	if err != nil || issue == nil {
+		return err
+	}
+
+	jwt, err := readAccountJWT(ctx, storage, JWTParameters{
+		Operator: operator,
+		Account:  account,
+	})
 	if err != nil {
 		return err
 	}
-	for _, issueName := range issuesList {
-		issue, err := readAccountIssue(ctx, storage, IssueAccountParameters{
-			Operator: operator,
-			Account:  issueName,
-		})
-		if err != nil {
-			return err
-		}
-		jwtMissing := false
-		nkeyMissing := false
-		jwt, err := readAccountJWT(ctx, storage, JWTParameters{
-			Operator: operator,
-			Account:  issueName,
-		})
-		if err != nil {
-			return err
-		}
-		if !issue.Status.Account.JWT || jwt == nil {
-			jwtMissing = true
-		}
+	jwtMissing := !issue.Status.Account.JWT || jwt == nil
 
-		nkey, err := readAccountNkey(ctx, storage, NkeyParameters{
-			Operator: operator,
-			Account:  issueName,
-		})
-		if err != nil {
-			return err
-		}
-		if !issue.Status.Account.Nkey || nkey == nil {
-			nkeyMissing = true
-		}
+	nkey, err := readAccountNkey(ctx, storage, NkeyParameters{
+		Operator: operator,
+		Account:  account,
+	})
+	if err != nil {
+		return err
+	}
+	nkeyMissing := !issue.Status.Account.Nkey || nkey == nil
 
-		if jwtMissing || nkeyMissing || anyExpiredRevocations(issue) {
-			if err := refreshAccount(ctx, storage, issue); err != nil {
-				return err
-			}
-		}
+	if jwtMissing || nkeyMissing || anyExpiredRevocations(issue) {
+		return refreshAccount(ctx, storage, issue)
 	}
 	return nil
 }

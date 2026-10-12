@@ -2,6 +2,7 @@ package natsbackend
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -660,24 +661,26 @@ func updateUserIssues(ctx context.Context, storage logical.Storage, issue IssueA
 		return err
 	}
 
-	for _, user := range users {
+	var errs []error
+	for _, name := range users {
 		user, err := readUserIssue(ctx, storage, IssueUserParameters{
 			Operator: issue.Operator,
 			Account:  issue.Account,
-			User:     user,
+			User:     name,
 		})
 		if err != nil {
-			return err
+			errs = append(errs, fmt.Errorf("user %s: %w", name, err))
+			continue
 		}
 		if user == nil {
-			return err
+			continue
 		}
 		err = refreshUser(ctx, storage, user)
 		if err != nil {
-			return err
+			errs = append(errs, fmt.Errorf("user %s: %w", name, err))
 		}
 	}
-	return nil
+	return errors.Join(errs...)
 }
 
 type AccountResolverAction string
@@ -826,17 +829,17 @@ func refreshAccountResolver(ctx context.Context, storage logical.Storage, issue 
 			return err
 		}
 
-		// read account jwt
+		// read account nkey
 		accNkey, err := readAccountNkey(ctx, storage, NkeyParameters{
 			Operator: issue.Operator,
 			Account:  issue.Account,
 		})
 		if err != nil {
 			return err
-		} else if accJWT == nil {
+		} else if accNkey == nil {
 			log.Warn().Str("operator", issue.Operator).
 				Str("account", issue.Account).
-				Msg("cannot sync account server: account neky does not exist")
+				Msg("cannot sync account server: account nkey does not exist")
 			return nil
 		}
 		kp, err = toNkeyData(accNkey)
@@ -957,6 +960,17 @@ func updateAccountStatus(ctx context.Context, storage logical.Storage, issue *Is
 func IsNatsUrl(url string) bool {
 	url = strings.ToLower(strings.TrimSpace(url))
 	return strings.HasPrefix(url, "nats://") || strings.HasPrefix(url, ",nats://")
+}
+
+func accountSignerExists(ctx context.Context, storage logical.Storage, account *IssueAccountStorage) (bool, error) {
+	var nkey *NKeyStorage
+	var err error
+	if account.UseSigningKey == "" {
+		nkey, err = readOperatorNkey(ctx, storage, NkeyParameters{Operator: account.Operator})
+	} else {
+		nkey, err = readOperatorSigningNkey(ctx, storage, NkeyParameters{Operator: account.Operator, Signing: account.UseSigningKey})
+	}
+	return nkey != nil, err
 }
 
 func addUserToRevocationList(ctx context.Context, storage logical.Storage, account *IssueAccountStorage, user *IssueUserStorage) error {
