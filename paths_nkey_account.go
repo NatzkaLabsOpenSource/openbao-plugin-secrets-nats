@@ -34,10 +34,12 @@ func pathAccountNkey(b *NatsBackend) []*framework.Path {
 			},
 			Operations: map[logical.Operation]framework.OperationHandler{
 				logical.CreateOperation: &framework.PathOperation{
-					Callback: b.pathAddAccountNkey,
+					Callback:   b.pathAddAccountNkey,
+					Deprecated: true,
 				},
 				logical.UpdateOperation: &framework.PathOperation{
-					Callback: b.pathAddAccountNkey,
+					Callback:   b.pathAddAccountNkey,
+					Deprecated: true,
 				},
 				logical.ReadOperation: &framework.PathOperation{
 					Callback: b.pathReadAccountNkey,
@@ -82,7 +84,7 @@ func (b *NatsBackend) pathAddAccountNkey(ctx context.Context, req *logical.Reque
 	if err != nil {
 		return logical.ErrorResponse(fmt.Sprintf("%s: %s", AddingNkeyFailedError, err.Error())), nil
 	}
-	return nil, nil
+	return deprecatedWrite(), nil
 }
 
 func (b *NatsBackend) pathReadAccountNkey(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {

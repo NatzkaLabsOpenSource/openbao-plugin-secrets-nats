@@ -29,10 +29,12 @@ func pathOperatorJWT(b *NatsBackend) []*framework.Path {
 			},
 			Operations: map[logical.Operation]framework.OperationHandler{
 				logical.CreateOperation: &framework.PathOperation{
-					Callback: b.pathAddOperatorJWT,
+					Callback:   b.pathAddOperatorJWT,
+					Deprecated: true,
 				},
 				logical.UpdateOperation: &framework.PathOperation{
-					Callback: b.pathAddOperatorJWT,
+					Callback:   b.pathAddOperatorJWT,
+					Deprecated: true,
 				},
 				logical.ReadOperation: &framework.PathOperation{
 					Callback: b.pathReadOperatorJWT,
@@ -71,7 +73,7 @@ func (b *NatsBackend) pathAddOperatorJWT(ctx context.Context, req *logical.Reque
 	if err != nil {
 		return logical.ErrorResponse(AddingJWTFailedError), nil
 	}
-	return nil, nil
+	return deprecatedWrite(), nil
 
 }
 

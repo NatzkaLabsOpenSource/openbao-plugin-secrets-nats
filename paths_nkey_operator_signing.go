@@ -34,10 +34,12 @@ func pathOperatorSigningNkey(b *NatsBackend) []*framework.Path {
 			},
 			Operations: map[logical.Operation]framework.OperationHandler{
 				logical.CreateOperation: &framework.PathOperation{
-					Callback: b.pathAddOperatorSigningNkey,
+					Callback:   b.pathAddOperatorSigningNkey,
+					Deprecated: true,
 				},
 				logical.UpdateOperation: &framework.PathOperation{
-					Callback: b.pathAddOperatorSigningNkey,
+					Callback:   b.pathAddOperatorSigningNkey,
+					Deprecated: true,
 				},
 				logical.ReadOperation: &framework.PathOperation{
 					Callback: b.pathReadOperatorSigningNkey,
@@ -82,7 +84,7 @@ func (b *NatsBackend) pathAddOperatorSigningNkey(ctx context.Context, req *logic
 	if err != nil {
 		return logical.ErrorResponse(fmt.Sprintf("%s: %s", AddingNkeyFailedError, err.Error())), nil
 	}
-	return nil, nil
+	return deprecatedWrite(), nil
 }
 
 func (b *NatsBackend) pathReadOperatorSigningNkey(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {

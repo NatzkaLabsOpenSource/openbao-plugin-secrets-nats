@@ -314,3 +314,9 @@ func (b *NatsBackend) periodicRefreshAccountIssues(ctx context.Context, storage 
 	}
 	return nil
 }
+
+func deprecatedWrite() *logical.Response {
+	resp := &logical.Response{}
+	resp.AddWarning("writing nkey/ and jwt/ paths is deprecated and will become read-only; keys and JWTs are managed through issue/ paths")
+	return resp
+}
