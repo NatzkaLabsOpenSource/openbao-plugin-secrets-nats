@@ -2,6 +2,7 @@ package natsbackend
 
 import (
 	"context"
+	"strings"
 
 	"github.com/nats-io/nkeys"
 	"github.com/openbao/openbao/sdk/v2/framework"
@@ -38,16 +39,19 @@ func pathAccountSigningNkey(b *NatsBackend) []*framework.Path {
 			},
 			Operations: map[logical.Operation]framework.OperationHandler{
 				logical.CreateOperation: &framework.PathOperation{
-					Callback: b.pathAddAccountSigningNkey,
+					Callback:   b.pathAddAccountSigningNkey,
+					Deprecated: true,
 				},
 				logical.UpdateOperation: &framework.PathOperation{
-					Callback: b.pathAddAccountSigningNkey,
+					Callback:   b.pathAddAccountSigningNkey,
+					Deprecated: true,
 				},
 				logical.ReadOperation: &framework.PathOperation{
 					Callback: b.pathReadAccountSigningNkey,
 				},
 				logical.DeleteOperation: &framework.PathOperation{
-					Callback: b.pathDeleteAccountSigningNkey,
+					Callback:   b.pathDeleteAccountSigningNkey,
+					Deprecated: true,
 				},
 			},
 			HelpSynopsis:    `Manages account signing Nkey keypairs.`,
@@ -91,7 +95,7 @@ func (b *NatsBackend) pathAddAccountSigningNkey(ctx context.Context, req *logica
 	if err != nil {
 		return logical.ErrorResponse("%s: %s", AddingNkeyFailedError, err.Error()), nil
 	}
-	return nil, nil
+	return deprecatedWrite(), nil
 }
 
 func (b *NatsBackend) pathReadAccountSigningNkey(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
@@ -139,12 +143,19 @@ func (b *NatsBackend) pathDeleteAccountSigningNkey(ctx context.Context, req *log
 	params := nkeyParams(data)
 	defer locksutil.LockWithUnlock(b.locks, params.Operator)()
 
-	// when a key is given, store it
+	users, err := usersUsingSigningKey(ctx, req.Storage, params.Operator, params.Account, params.Signing)
+	if err != nil {
+		return logical.ErrorResponse(DeleteNkeyFailedError), nil
+	}
+	if len(users) > 0 {
+		return logical.ErrorResponse("account signing key %s is used by users: %s", params.Signing, strings.Join(users, ", ")), nil
+	}
+
 	err = deleteAccountSigningNkey(ctx, req.Storage, params)
 	if err != nil {
 		return logical.ErrorResponse(DeleteNkeyFailedError), nil
 	}
-	return nil, nil
+	return deprecatedWrite(), nil
 }
 
 func readAccountSigningNkey(ctx context.Context, storage logical.Storage, params NkeyParameters) (*NKeyStorage, error) {

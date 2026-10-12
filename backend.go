@@ -314,3 +314,11 @@ func (b *NatsBackend) periodicRefreshAccountIssues(ctx context.Context, storage 
 	}
 	return nil
 }
+
+const deprecatedUserBeforeAccount = "creating a user before its account is deprecated and will be rejected in a future release"
+
+func deprecatedWrite() *logical.Response {
+	resp := &logical.Response{}
+	resp.AddWarning("writing and deleting nkey/ and jwt/ paths is deprecated, they will become read-only; keys and JWTs are managed through issue/ paths")
+	return resp
+}

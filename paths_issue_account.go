@@ -3,6 +3,7 @@ package natsbackend
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -223,6 +224,16 @@ func addAccountIssue(ctx context.Context, storage logical.Storage, params IssueA
 		Str("operator", params.Operator).Str("account", params.Account).
 		Msgf("issue account")
 
+	if params.UseSigningKey != "" {
+		op, err := readOperatorIssue(ctx, storage, IssueOperatorParameters{Operator: params.Operator})
+		if err != nil {
+			return err
+		}
+		if op != nil && !slices.Contains(op.Claims.SigningKeys, params.UseSigningKey) {
+			return fmt.Errorf("operator signing key %s does not exist", params.UseSigningKey)
+		}
+	}
+
 	// store issue
 	issue, err := storeAccountIssue(ctx, storage, params)
 	if err != nil {
@@ -274,6 +285,24 @@ func readAccountIssue(ctx context.Context, storage logical.Storage, params Issue
 func listAccountIssues(ctx context.Context, storage logical.Storage, operator string) ([]string, error) {
 	path := getAccountIssuePath(operator, "")
 	return listIssues(ctx, storage, path)
+}
+
+func accountsUsingSigningKey(ctx context.Context, storage logical.Storage, operator string, signingKey string) ([]string, error) {
+	accounts, err := listAccountIssues(ctx, storage, operator)
+	if err != nil {
+		return nil, err
+	}
+	var using []string
+	for _, account := range accounts {
+		issue, err := readAccountIssue(ctx, storage, IssueAccountParameters{Operator: operator, Account: account})
+		if err != nil {
+			return nil, err
+		}
+		if issue != nil && issue.UseSigningKey == signingKey {
+			using = append(using, account)
+		}
+	}
+	return using, nil
 }
 
 func deleteAccountIssue(ctx context.Context, storage logical.Storage, params IssueAccountParameters) error {
@@ -351,6 +380,19 @@ func storeAccountIssue(ctx context.Context, storage logical.Storage, params Issu
 	if issue == nil {
 		issue = &IssueAccountStorage{}
 	} else {
+		for _, signingKey := range issue.Claims.SigningKeys {
+			if slices.Contains(params.Claims.SigningKeys, signingKey) {
+				continue
+			}
+			users, err := usersUsingSigningKey(ctx, storage, params.Operator, params.Account, signingKey)
+			if err != nil {
+				return nil, err
+			}
+			if len(users) > 0 {
+				return nil, fmt.Errorf("account signing key %s is used by users: %s", signingKey, strings.Join(users, ", "))
+			}
+		}
+
 		// diff current and incomming signing keys
 		// delete removed signing keys
 		for _, signingKey := range issue.Claims.SigningKeys {

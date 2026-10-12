@@ -3,6 +3,7 @@ package natsbackend
 import (
 	"context"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/nats-io/jwt/v2"
@@ -159,9 +160,12 @@ func (b *NatsBackend) pathAddUserIssue(ctx context.Context, req *logical.Request
 	}
 	defer locksutil.LockWithUnlock(b.locks, params.Operator)()
 
-	err = addUserIssue(ctx, req.Storage, params)
+	warnings, err := addUserIssue(ctx, req.Storage, params)
 	if err != nil {
 		return logical.ErrorResponse(AddingIssueFailedError), nil
+	}
+	if len(warnings) > 0 {
+		return &logical.Response{Warnings: warnings}, nil
 	}
 	return nil, nil
 }
@@ -228,18 +232,31 @@ func (b *NatsBackend) pathDeleteUserIssue(ctx context.Context, req *logical.Requ
 	return nil, nil
 }
 
-func addUserIssue(ctx context.Context, storage logical.Storage, params IssueUserParameters) error {
+func addUserIssue(ctx context.Context, storage logical.Storage, params IssueUserParameters) ([]string, error) {
 	log.Info().
 		Str("operator", params.Operator).Str("account", params.Account).Str("user", params.User).
 		Msgf("issue user")
 
+	var warnings []string
+	if params.UseSigningKey != "" {
+		account, err := readAccountIssue(ctx, storage, IssueAccountParameters{Operator: params.Operator, Account: params.Account})
+		if err != nil {
+			return nil, err
+		}
+		if account == nil {
+			warnings = append(warnings, deprecatedUserBeforeAccount)
+		} else if !slices.Contains(account.Claims.SigningKeys, params.UseSigningKey) {
+			return nil, fmt.Errorf("account signing key %s does not exist", params.UseSigningKey)
+		}
+	}
+
 	// store issue
 	issue, err := storeUserIssue(ctx, storage, params)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	return refreshUser(ctx, storage, issue)
+	return warnings, refreshUser(ctx, storage, issue)
 }
 
 func refreshUser(ctx context.Context, storage logical.Storage, issue *IssueUserStorage) error {
@@ -285,6 +302,24 @@ func readUserIssue(ctx context.Context, storage logical.Storage, params IssueUse
 func listUserIssues(ctx context.Context, storage logical.Storage, params IssueUserParameters) ([]string, error) {
 	path := getUserIssuePath(params.Operator, params.Account, "")
 	return listIssues(ctx, storage, path)
+}
+
+func usersUsingSigningKey(ctx context.Context, storage logical.Storage, operator string, account string, signingKey string) ([]string, error) {
+	users, err := listUserIssues(ctx, storage, IssueUserParameters{Operator: operator, Account: account})
+	if err != nil {
+		return nil, err
+	}
+	var using []string
+	for _, user := range users {
+		issue, err := readUserIssue(ctx, storage, IssueUserParameters{Operator: operator, Account: account, User: user})
+		if err != nil {
+			return nil, err
+		}
+		if issue != nil && issue.UseSigningKey == signingKey {
+			using = append(using, user)
+		}
+	}
+	return using, nil
 }
 
 func deleteUserIssue(ctx context.Context, storage logical.Storage, params IssueUserParameters) error {

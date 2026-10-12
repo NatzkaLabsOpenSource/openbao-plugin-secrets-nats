@@ -29,16 +29,19 @@ func pathOperatorNkey(b *NatsBackend) []*framework.Path {
 			},
 			Operations: map[logical.Operation]framework.OperationHandler{
 				logical.CreateOperation: &framework.PathOperation{
-					Callback: b.pathAddOperatorNkey,
+					Callback:   b.pathAddOperatorNkey,
+					Deprecated: true,
 				},
 				logical.UpdateOperation: &framework.PathOperation{
-					Callback: b.pathAddOperatorNkey,
+					Callback:   b.pathAddOperatorNkey,
+					Deprecated: true,
 				},
 				logical.ReadOperation: &framework.PathOperation{
 					Callback: b.pathReadOperatorNkey,
 				},
 				logical.DeleteOperation: &framework.PathOperation{
-					Callback: b.pathDeleteOperatorNkey,
+					Callback:   b.pathDeleteOperatorNkey,
+					Deprecated: true,
 				},
 			},
 			HelpSynopsis:    `Manages operator Nkeys.`,
@@ -70,7 +73,7 @@ func (b *NatsBackend) pathAddOperatorNkey(ctx context.Context, req *logical.Requ
 	if err != nil {
 		return logical.ErrorResponse(fmt.Sprintf("%s: %s", AddingNkeyFailedError, err.Error())), nil
 	}
-	return nil, nil
+	return deprecatedWrite(), nil
 }
 
 func (b *NatsBackend) pathReadOperatorNkey(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
@@ -121,7 +124,7 @@ func (b *NatsBackend) pathDeleteOperatorNkey(ctx context.Context, req *logical.R
 	if err != nil {
 		return logical.ErrorResponse(DeleteNkeyFailedError), nil
 	}
-	return nil, nil
+	return deprecatedWrite(), nil
 }
 
 func readOperatorNkey(ctx context.Context, storage logical.Storage, params NkeyParameters) (*NKeyStorage, error) {
