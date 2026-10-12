@@ -99,3 +99,25 @@ func TestConcurrentUserDeletesKeepAllRevocations(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Len(t, issue.Status.Revocations, users)
 }
+
+func TestPeriodicContinuesAfterFailure(t *testing.T) {
+	ctx := context.Background()
+	b, s := getTestBackend(t)
+	sync := map[string]interface{}{"syncAccountServer": true}
+	for path, data := range map[string]map[string]interface{}{"issue/operator/op0": sync, "issue/operator/op1": sync} {
+		resp, err := b.HandleRequest(ctx, &logical.Request{Operation: logical.UpdateOperation, Path: path, Storage: s, Data: data})
+		assert.NoError(t, err)
+		assert.False(t, resp != nil && resp.IsError(), "%v", resp)
+	}
+	resp, err := b.HandleRequest(ctx, &logical.Request{Operation: logical.UpdateOperation, Path: "issue/operator/op1/account/acc1", Storage: s})
+	assert.NoError(t, err)
+	assert.False(t, resp != nil && resp.IsError(), "%v", resp)
+	assert.NoError(t, s.Put(ctx, &logical.StorageEntry{Key: getAccountIssuePath("op0", "broken"), Value: []byte("{")}))
+	assert.NoError(t, deleteAccountJWT(ctx, s, JWTParameters{Operator: "op1", Account: "acc1"}))
+
+	assert.Error(t, b.periodicFunc(ctx, &logical.Request{Storage: s}))
+
+	jwt, err := readAccountJWT(ctx, s, JWTParameters{Operator: "op1", Account: "acc1"})
+	assert.NoError(t, err)
+	assert.NotNil(t, jwt)
+}
