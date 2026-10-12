@@ -1,6 +1,9 @@
 package resolver
 
 import (
+	"crypto/tls"
+	"crypto/x509"
+	"errors"
 	"fmt"
 	"net/url"
 	"strings"
@@ -10,6 +13,18 @@ import (
 	"github.com/nats-io/nkeys"
 	"github.com/rs/zerolog/log"
 )
+
+// TLSConfig holds TLS configuration for connecting to a TLS-enabled NATS server.
+type TLSConfig struct {
+	// CACert is a PEM-encoded CA certificate used to verify the server's certificate.
+	CACert string
+	// ClientCert is a PEM-encoded client certificate for mTLS (optional).
+	ClientCert string
+	// ClientKey is a PEM-encoded client private key for mTLS (optional).
+	ClientKey string
+	// TLSFirst enables TLS handshake before any NATS protocol exchange (handshake_first mode).
+	TLSFirst bool
+}
 
 func (r *Resolver) CloseConnection() {
 	if r != nil {
@@ -21,16 +36,22 @@ func (r *Resolver) CloseConnection() {
 
 func isNatsUrl(url string) bool {
 	url = strings.ToLower(strings.TrimSpace(url))
-	return strings.HasPrefix(url, "nats://") || strings.HasPrefix(url, ",nats://")
+	return strings.HasPrefix(url, "nats://") || strings.HasPrefix(url, ",nats://") ||
+		strings.HasPrefix(url, "tls://") || strings.HasPrefix(url, ",tls://")
 }
 
-func createConnection(url string, userJWT []byte, userKp nkeys.KeyPair) (*nats.Conn, error) {
+func createConnection(url string, userJWT []byte, userKp nkeys.KeyPair, tlsCfg *TLSConfig) (*nats.Conn, error) {
 	if !isValidURL(url) {
 		return nil, fmt.Errorf("invalid url: %s", url)
 	}
 
 	if !isNatsUrl(url) {
-		return nil, fmt.Errorf("invalid url: %s, currently only nats urls are supported", url)
+		return nil, fmt.Errorf("invalid url: %s, only nats:// and tls:// urls are supported", url)
+	}
+
+	tlsOpts, err := tlsOptions(tlsCfg)
+	if err != nil {
+		return nil, fmt.Errorf("invalid tls configuration: %w", err)
 	}
 
 	nats.NewInbox()
@@ -43,7 +64,8 @@ func createConnection(url string, userJWT []byte, userKp nkeys.KeyPair) (*nats.C
 			})
 	}
 
-	return nats.Connect(url, createDefaultToolOptions("nsc_push", getOpt(string(userJWT), userKp))...)
+	opts := append(tlsOpts, getOpt(string(userJWT), userKp))
+	return nats.Connect(url, createDefaultToolOptions("nsc_push", opts...)...)
 }
 
 func createDefaultToolOptions(name string, o ...nats.Option) []nats.Option {
@@ -53,10 +75,6 @@ func createDefaultToolOptions(name string, o ...nats.Option) []nats.Option {
 
 	opts := []nats.Option{nats.Name(name)}
 	opts = append(opts, nats.Timeout(connectTimeout))
-	// todo: add tls
-	// opts = append(opts, rootCAsNats)
-	// opts = append(opts, tlsKeyNats)
-	// opts = append(opts, tlsCertNats)
 	opts = append(opts, nats.ReconnectWait(reconnectDelay))
 	opts = append(opts, nats.MaxReconnects(int(totalWait/reconnectDelay)))
 	opts = append(opts, nats.DisconnectErrHandler(func(nc *nats.Conn, err error) {
@@ -81,6 +99,51 @@ func createDefaultToolOptions(name string, o ...nats.Option) []nats.Option {
 	return opts
 }
 
+// tlsOptions builds NATS TLS options from the provided TLSConfig.
+//
+// Every field is optional and independent. Without a CA certificate the system
+// trust store is used; with no field set no TLS option is added and nats.go
+// still upgrades to TLS when the URL scheme is tls:// or the server requires it.
+// Malformed PEM input is an error instead of being silently dropped.
+func tlsOptions(cfg *TLSConfig) ([]nats.Option, error) {
+	if cfg == nil {
+		return nil, nil
+	}
+
+	var opts []nats.Option
+
+	if cfg.CACert != "" || cfg.ClientCert != "" || cfg.ClientKey != "" {
+		tc := &tls.Config{}
+
+		if cfg.CACert != "" {
+			certPool := x509.NewCertPool()
+			if !certPool.AppendCertsFromPEM([]byte(cfg.CACert)) {
+				return nil, errors.New("tlsCaCert does not contain a valid PEM certificate")
+			}
+			tc.RootCAs = certPool
+		}
+
+		if cfg.ClientCert != "" || cfg.ClientKey != "" {
+			if cfg.ClientCert == "" || cfg.ClientKey == "" {
+				return nil, errors.New("tlsClientCert and tlsClientKey must be set together")
+			}
+			cert, err := tls.X509KeyPair([]byte(cfg.ClientCert), []byte(cfg.ClientKey))
+			if err != nil {
+				return nil, fmt.Errorf("cannot parse tlsClientCert/tlsClientKey: %w", err)
+			}
+			tc.Certificates = []tls.Certificate{cert}
+		}
+
+		opts = append(opts, nats.Secure(tc))
+	}
+
+	if cfg.TLSFirst {
+		opts = append(opts, nats.TLSHandshakeFirst())
+	}
+
+	return opts, nil
+}
+
 func isValidURL(s string) bool {
 	s = strings.TrimSpace(s)
 	if s == "" {
@@ -92,7 +155,7 @@ func isValidURL(s string) bool {
 		return false
 	}
 	scheme := strings.ToLower(u.Scheme)
-	supported := []string{"http", "https", "nats"}
+	supported := []string{"http", "https", "nats", "tls"}
 
 	ok := false
 	for _, v := range supported {

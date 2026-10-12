@@ -727,13 +727,21 @@ func refreshAccountResolver(ctx context.Context, storage logical.Storage, issue 
 		return err
 	}
 
+	// build TLS config from operator issue; every field is independent and optional
+	tlsCfg := &resolver.TLSConfig{
+		CACert:     op.TLSCACert,
+		ClientCert: op.TLSClientCert,
+		ClientKey:  op.TLSClientKey,
+		TLSFirst:   op.TLSFirst,
+	}
+
 	// connect to nats
-	resolver, err := resolver.NewResolver(op.Claims.AccountServerURL, []byte(sysUserCreds.jwt), sysUserKp)
+	resolver, err := resolver.NewResolver(op.Claims.AccountServerURL, []byte(sysUserCreds.jwt), sysUserKp, tlsCfg)
 	if err != nil {
 		log.Warn().Str("operator", issue.Operator).
 			Str("account", issue.Account).
 			Err(err).
-			Msg("cannot create conection to account server")
+			Msg("cannot create connection to account server")
 		resolver.CloseConnection()
 		return nil
 	}

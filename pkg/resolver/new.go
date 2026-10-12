@@ -9,8 +9,8 @@ type Resolver struct {
 	nc *nats.Conn
 }
 
-func NewResolver(url string, userJWT []byte, userKp nkeys.KeyPair) (*Resolver, error) {
-	nc, err := createConnection(url, userJWT, userKp)
+func NewResolver(url string, userJWT []byte, userKp nkeys.KeyPair, tlsCfg *TLSConfig) (*Resolver, error) {
+	nc, err := createConnection(url, userJWT, userKp, tlsCfg)
 	if err != nil {
 		return nil, err
 	}

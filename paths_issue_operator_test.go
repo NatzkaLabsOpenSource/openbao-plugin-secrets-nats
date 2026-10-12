@@ -561,3 +561,40 @@ func TestCRUDOperatorIssue(t *testing.T) {
 		assert.True(t, resp.IsError())
 	})
 }
+
+func TestOperatorIssueTLSFields(t *testing.T) {
+	b, reqStorage := getTestBackend(t)
+	path := "issue/operator/op1"
+
+	resp, err := b.HandleRequest(context.Background(), &logical.Request{
+		Operation: logical.CreateOperation,
+		Path:      path,
+		Storage:   reqStorage,
+		Data: map[string]interface{}{
+			"tlsCaCert":     "ca-pem",
+			"tlsClientCert": "client-cert-pem",
+			"tlsClientKey":  "client-key-pem",
+			"tlsFirst":      true,
+		},
+	})
+	assert.NoError(t, err)
+	assert.False(t, resp.IsError())
+
+	resp, err = b.HandleRequest(context.Background(), &logical.Request{
+		Operation: logical.ReadOperation,
+		Path:      path,
+		Storage:   reqStorage,
+	})
+	assert.NoError(t, err)
+	assert.False(t, resp.IsError())
+
+	assert.Equal(t, "ca-pem", resp.Data["tlsCaCert"])
+	assert.Equal(t, "client-cert-pem", resp.Data["tlsClientCert"])
+	assert.Equal(t, true, resp.Data["tlsFirst"])
+	assert.NotContains(t, resp.Data, "tlsClientKey", "private key must not be returned on read")
+
+	// the key is still persisted so the resolver push can use it
+	stored, err := readOperatorIssue(context.Background(), reqStorage, IssueOperatorParameters{Operator: "op1"})
+	assert.NoError(t, err)
+	assert.Equal(t, "client-key-pem", stored.TLSClientKey)
+}
